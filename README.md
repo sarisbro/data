@@ -1,1 +1,1 @@
-Additional data
+Additional data: see Wiki for details.
