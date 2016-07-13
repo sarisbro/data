@@ -1,3 +1,6 @@
+Additional data
+===============
+
 Garcia.ArisBrosou.tar.bz2: 
 Garcia V. and Aris-Brosou S. 2014. Comparative dynamics and distribution of influenza drug resistance acquisition to protein M2 and neuraminidase inhibitors. Molecular Biology and Evolution. 31(2):355-363.
 http://dx.doi.org/10.1093/molbev/mst204
