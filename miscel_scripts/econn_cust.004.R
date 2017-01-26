@@ -23,7 +23,7 @@ library(corrplot)
 												###############
 
 assay <- "Assay1"
-datafile <- "data/NA_0316_0614.csv"
+datafile <- "data/Assay1_0316_0614.csv"
 #load(paste0("econn_cust_", assay, ".RData"))
 
 
