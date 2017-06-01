@@ -1,6 +1,9 @@
 Additional data
 ===============
 
+AIN_data_scripts.tar.bz2:
+Aris-Brosou S., Ibeh N and Noel J. Submitted. Viral outbreaks involve destabilized viruses: evidence from Ebola, Influenza and Zika
+
 Garcia.ArisBrosou.tar.bz2: 
 Garcia V. and Aris-Brosou S. 2014. Comparative dynamics and distribution of influenza drug resistance acquisition to protein M2 and neuraminidase inhibitors. Molecular Biology and Evolution. 31(2):355-363.
 http://dx.doi.org/10.1093/molbev/mst204
