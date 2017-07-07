@@ -22,9 +22,8 @@ library(corrplot)
 												# E-conn data #
 												###############
 
-assay <- "Assay1"
-datafile <- "data/Assay1_0316_0614.csv"
-#load(paste0("econn_cust_", assay, ".RData"))
+assay <- "Assay_A"
+datafile <- "../data/Assay_A_0316_0614.csv"
 
 
 # no edits required from here
@@ -70,13 +69,63 @@ dev.off()
 
 save.image(paste0(assay_dir, "econn_cust_", assay, ".RData"))
 
+###########################
+# split data at mid point #
+###########################
+midpoint_date <- min(datetime) + (max(datetime) - min(datetime))/2
+econn_dat <- econn_dat[datetime > midpoint_date, ]
+
+# sort data by datetime
+econn_dat_ori <- econn_dat
+econn_dat <- econn_dat_ori[order(as.POSIXct(strptime(econn_dat_ori$Time.Metering, format = "%Y-%m-%d %H:%M:%S"), tz = "EST")),]
+
+
+# timing
+datetime <- as.POSIXct(strptime(econn_dat$Time.Metering, format = "%Y-%m-%d %H:%M:%S"), tz = "EST")
+day_of_month <- as.numeric(format(datetime, "%d"))
+hour_of_day <- as.numeric(format(datetime, "%I"))
+time_of_day <- as.numeric(format(datetime, "%H"))
+weekday <- weekdays(datetime)
+
+which(is.na(datetime))
+datetime[which(is.na(datetime))[1]]
+econn_dat$Time.Metering[which(is.na(datetime))[1]]
+
+
+min(datetime)
+max(datetime)
+max(datetime) - min(datetime) # 90.98508 days
+
+pdf(paste0(assay_dir, assay, "_timing_split.pdf"), width=18, height=8)
+par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1),mfrow=c(2,3))
+plot(datetime, pch=".", xlab="Ordered distribution of dates/times", ylab="Dates/times")
+plot(day_of_month, datetime, pch=".")
+plot(time_of_day, datetime, pch=".")
+hist(time_of_day,24, xlab="Time of day (0-24h)", main="")
+hist(day_of_month)
+plot(table(weekday), type="h")
+dev.off()
+
+save.image(paste0(assay_dir, "econn_cust_", assay, ".RData"))
 
 												#################
 												# Customer data #
 												#################
 
-cust_data <- read.csv("data/reagent_complaints_012016_062016.csv")
+cust_data <- read.csv("../reagent_complaints_012016_062016.csv")
 head(cust_data)
+
+# prune all Z* related call areas
+cust_data <- cust_data[-grep("^Z", cust_data$Call_Area),]
+
+# groups call areas
+cust_data$Call_Area[cust_data$Call_Area == "QCDH"] <- as.factor("QCH")
+cust_data$Call_Area[cust_data$Call_Area == "QCH"] <- as.factor("QCH")
+cust_data$Call_Area[cust_data$Call_Area == "QCSH"] <- as.factor("QCH")
+#
+cust_data$Call_Area[cust_data$Call_Area == "QCDL"] <- as.factor("QCL")
+cust_data$Call_Area[cust_data$Call_Area == "QCL"] <- as.factor("QCL")
+cust_data$Call_Area[cust_data$Call_Area == "QCSL"] <- as.factor("QCL")
 
 datetime_cust <- as.POSIXct(strptime(cust_data$Create_Audit_DT, format = "%Y-%m-%d %H:%M:%S"), tz = "EST")
 min(datetime_cust)
@@ -89,7 +138,6 @@ cust_data <- cust_data_ori[order(as.POSIXct(strptime(cust_data_ori$Create_Audit_
 datetime_cust <- as.POSIXct(strptime(cust_data$Create_Audit_DT, format = "%Y-%m-%d %H:%M:%S"), tz = "EST")
 
 # match customer data with E-conn data
-#cust_data_match <- cust_data[(datetime_cust > min(datetime)) & (datetime_cust <= max(datetime)),]
 cust_data_match <- cust_data[(datetime_cust > min(datetime)),]
 datetime_cust <- as.POSIXct(strptime(cust_data_match$Create_Audit_DT, format = "%Y-%m-%d %H:%M:%S"), tz = "EST")
 pdf(paste0(assay_dir, assay, "_timing_cust.pdf"), width=24, height=8)
@@ -140,26 +188,26 @@ corrplot.mixed(err_M)
 dev.off()
 
 
-pdf(paste0(assay_dir, assay, "_ccf_errors.pdf"), width=6*length(err_name), height=4*length(err_name))
-par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1),mfrow=c(length(err_name),length(err_name)))
-for(i in 1:length(err_name)){
-	for(j in 1:length(err_name)){
-		# bin data by day
-		time_interval <- 24*60*60 # in seconds
-		ts1 <- err_df_raw[,i]
-		ts1z <- zoo(ts1, datetime_cust)
-		ts1z_aggr <- aggregate(ts1z, time(ts1z) - as.numeric(time(ts1z)) %% time_interval, mean)
-		
-		ts2 <- err_df_raw[,j]
-		ts2z <- zoo(ts2, datetime_cust)
-		ts2z_aggr <- aggregate(ts2z, time(ts2z) - as.numeric(time(ts2z)) %% time_interval, mean)
-		
-		ccf_obj <- ccf(ts1z_aggr, ts2z_aggr, xlab="Lag (in seconds)", ylim=c(-1,1), lwd=2)
-		#text(-1e6, max(ccf_obj$acf), paste0(err_name[i], " vs. ", err_name[j]), font=2)
-		text(-1e6, 1, paste0(err_name[i], " vs. ", err_name[j]), font=2)
-	}
-}
-dev.off()
+#pdf(paste0(assay_dir, assay, "_ccf_errors.pdf"), width=6*length(err_name), height=4*length(err_name))
+#par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1),mfrow=c(length(err_name),length(err_name)))
+#for(i in 1:length(err_name)){
+#	for(j in 1:length(err_name)){
+#		# bin data by day
+#		time_interval <- 24*60*60 # in seconds
+#		ts1 <- err_df_raw[,i]
+#		ts1z <- zoo(ts1, datetime_cust)
+#		ts1z_aggr <- aggregate(ts1z, time(ts1z) - as.numeric(time(ts1z)) %% time_interval, mean)
+#		
+#		ts2 <- err_df_raw[,j]
+#		ts2z <- zoo(ts2, datetime_cust)
+#		ts2z_aggr <- aggregate(ts2z, time(ts2z) - as.numeric(time(ts2z)) %% time_interval, mean)
+#		
+#		ccf_obj <- ccf(ts1z_aggr, ts2z_aggr, xlab="Lag (in seconds)", ylim=c(-1,1), lwd=2)
+#		#text(-1e6, max(ccf_obj$acf), paste0(err_name[i], " vs. ", err_name[j]), font=2)
+#		text(-1e6, 1, paste0(err_name[i], " vs. ", err_name[j]), font=2)
+#	}
+#}
+#dev.off()
 
 
 # pdf(paste0(assay_dir, assay, "_ccf_errors_ex.pdf"), width=12, height=4)
