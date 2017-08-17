@@ -27,4 +27,4 @@ recomb2010.tar.bz2:
 Aris-Brosou S. 2010. A simple measure of the dynamics of segmented genomes: an application to influenza. RECOMB-CG 2010, Lecture Notes in Bioinformatics. 6398:149-160.
 http://dx.doi.org/10.1007/978-3-642-16181-0_13
 
-miscel_scripts: scripts written for various projects.
+miscel_scripts: scripts written for various projects (check script headers for details).
