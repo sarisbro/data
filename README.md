@@ -2,7 +2,7 @@ Additional data
 ===============
 
 Byrne_etal_SeqAlignments.tar.bz2
-Byrne L., Chapleau F and Aris-Brosou S. Submitted. How the Central American Seaway and an ancient northern passage affected Flatfish diversification.
+Byrne L., Chapleau F and Aris-Brosou S. Submitted. How the Central American Seaway and an ancient northern passage affected flatfish diversification.
 
 LHDA_data.tar.bz2
 Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying the genetic determinants of particular phenotypes in microbial genomes with very small training sets.
