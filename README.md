@@ -1,13 +1,13 @@
 Additional data
 ===============
 
-Byrne_etal_SeqAlignments.tar.bz2
-Byrne L., Chapleau F and Aris-Brosou S. 2018. How the Central American Seaway and an ancient northern passage affected flatfish diversification. Molecular Biology and Evolution. 
-https://doi.org/10.1093/molbev/msy104
-
 LHDA_data.tar.bz2
 Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying the genetic determinants of particular phenotypes in microbial genomes with very small training sets.
 http://dx.doi.org/10.1101/181222
+
+Byrne_etal_SeqAlignments.tar.bz2
+Byrne L., Chapleau F and Aris-Brosou S. 2018. How the Central American Seaway and an ancient northern passage affected flatfish diversification. Molecular Biology and Evolution. 35:1982–1989
+https://doi.org/10.1093/molbev/msy104
 
 AIN_data_scripts.tar.bz2:
 Aris-Brosou S., Ibeh N and Noel J. 2017. Viral outbreaks involve destabilized viruses: evidence from Ebola, Influenza and Zika. Scientific Reports. 7:11881.
