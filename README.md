@@ -1,11 +1,11 @@
 Additional data
 ===============
 
-LHDA_data.tar.bz2
+LHDA_data.tar.bz2:
 Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying genetic determinants of complex phenotypes from whole genome sequence data and very small training sets.
 http://dx.doi.org/10.1101/181222
 
-Byrne_etal_SeqAlignments.tar.bz2
+Byrne_etal_SeqAlignments.tar.bz2:
 Byrne L., Chapleau F and Aris-Brosou S. 2018. How the Central American Seaway and an ancient northern passage affected flatfish diversification. Molecular Biology and Evolution. 35:1982–1989
 https://doi.org/10.1093/molbev/msy104
 
