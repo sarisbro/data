@@ -2,7 +2,7 @@ Additional data
 ===============
 
 LHDA_data.tar.bz2
-Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying the genetic determinants of particular phenotypes in microbial genomes with very small training sets.
+Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying genetic determinants of complex phenotypes from whole genome sequence data and very small training sets.
 http://dx.doi.org/10.1101/181222
 
 Byrne_etal_SeqAlignments.tar.bz2
