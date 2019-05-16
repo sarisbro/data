@@ -1,8 +1,8 @@
 Additional data
 ===============
 
-API_scripts.zip:
-Aris-Brosou S., Parent L. and Ibeh N. Submitted. Episodic diversifying selection and intragenomic interactions shape the evolution of DNA and RNA viruses.
+API_scripts.zip (3 files):
+Aris-Brosou S., Parent L. and Ibeh N. Submitted. Viral long-term evolutionary strategies favor stability over proliferation.
 https://doi.org/10.1101/539239
 
 AncHumScripts.tar.bz2:
