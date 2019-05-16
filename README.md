@@ -10,7 +10,7 @@ Aris-Brosou S. Submitted. Evidence of a nonadaptive buildup of mutational load i
 https://doi.org/10.1101/307058
 
 LHDA_data.tar.bz2:
-Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying genetic determinants of complex phenotypes from whole genome sequence data and very small training sets.
+Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying genetic determinants of complex phenotypes from whole genome sequence data.
 https://doi.org/10.1101/181222
 
 Byrne_etal_SeqAlignments.tar.bz2:
