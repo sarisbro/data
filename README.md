@@ -10,8 +10,8 @@ Aris-Brosou S. Submitted. Evidence of a nonadaptive buildup of mutational load i
 https://doi.org/10.1101/307058
 
 LHDA_data.tar.bz2:
-Long G.S., Hussen M., Dench J. and Aris-Brosou S. Submitted. Identifying genetic determinants of complex phenotypes from whole genome sequence data.
-https://doi.org/10.1101/181222
+Long G.S., Hussen M., Dench J. and Aris-Brosou S. In press. Identifying genetic determinants of complex phenotypes from whole genome sequence data. BMC Genomics. 
+https://doi.org/10.1186/s12864-019-5820-0
 
 Byrne_etal_SeqAlignments.tar.bz2:
 Byrne L., Chapleau F. and Aris-Brosou S. 2018. How the Central American Seaway and an ancient northern passage affected flatfish diversification. Molecular Biology and Evolution. 35:1982–1989
