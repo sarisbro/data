@@ -1,4 +1,10 @@
-# R CMD BATCH new_salt_0019.R &
+# This script was developed to analyze data for Shoji et al. (unpublished)
+# comparing GLS data for rhinoceros auklets sampled on both sides of the Pacific
+# (Japan [JP] and Alaska [AK]) in relation to environmental [THg] (total mercury).
+# GLS data are available from first author.
+
+
+# R CMD BATCH gls_sid_JP-AK_Hg.R &
 
 library(chron)
 library(maps)
