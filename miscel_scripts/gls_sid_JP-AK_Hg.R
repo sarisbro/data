@@ -1,6 +1,7 @@
-# This script was developed to analyze data for Shoji et al. (unpublished)
+# This script was developed to analyze data in Shoji et al. (unpublished)
 # comparing GLS data for rhinoceros auklets sampled on both sides of the Pacific
-# (Japan [JP] and Alaska [AK]) in relation to environmental [THg] (total mercury).
+# (Japan [JP] and Alaska [AK]) in relation to environmental [THg] (total mercury)
+# during wintering.
 # GLS data are available from first author.
 
 
