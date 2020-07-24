@@ -224,13 +224,11 @@ arc_tr50 <- root(arc_tr50, tmp_root_arc, resolve.root=T)
 pdf("trees_arc.pdf", width=10, height=10)
 par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1), mfrow=c(1,2))
 
-#plot(arc_tr, type="u", show.tip.label=F, no.margin=T)
 plot(ladderize(arc_tr), direction="r", show.tip.label=F, no.margin=T)
 text(1.3, .1, "Archeae -- full aln", font = 2)
 tiplabels("o", bin_pos_arc, frame = "n", adj = -2.5, col="red")
 add.scale.bar()
 
-#plot(arc_tr50, type="u", show.tip.label=F, no.margin=T)
 plot(ladderize(arc_tr50), direction="l", show.tip.label=F, no.margin=T)
 text(.9, .1, "Archeae -- 1/2 gap aln", font = 2)
 tiplabels("o", bin_pos_arc50, frame = "n", adj = 2.5, col="red")
@@ -255,13 +253,11 @@ bac_tr50 <- root(bac_tr50, tmp_root_bac, resolve.root=T)
 pdf("trees_bac.pdf", width=10, height=10)
 par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1), mfrow=c(1,2))
 
-#plot(bac_tr, type="u", show.tip.label=F, no.margin=T)
 plot(ladderize(bac_tr), direction="r", show.tip.label=F, no.margin=T)
 text(1.3, .1, "Bacteria -- full aln", font = 2)
 tiplabels("o", bin_pos_bac, frame = "n", adj = -2.5, col="red")
 add.scale.bar()
 
-#plot(bac_tr50, type="u", show.tip.label=F, no.margin=T)
 plot(ladderize(bac_tr50), direction="l", show.tip.label=F, no.margin=T)
 text(.9, .1, "Bacteria -- 1/2 gap aln", font = 2)
 tiplabels("o", bin_pos_bac50, frame = "n", adj = 2.5, col="red")
@@ -302,9 +298,7 @@ for(k in 1:NREPS){
 		if(!(i %% 100)){
 			print(paste0("Now doing ", i, "/", Nreps))
 		}
-		#tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rSPR(multi2di(sub_arc_tr50), 2)))
 		tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rSPR(multi2di(sub_arc_tr50), 1, 1)))
-		#tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rNNI(multi2di(sub_arc_tr50))))
 		return(tmp)
 	}
 	
@@ -374,9 +368,7 @@ for(k in 1:NREPS){
 		if(!(i %% 100)){
 			print(paste0("Now doing ", i, "/", Nreps))
 		}
-		#tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rSPR(multi2di(sub_bac_tr50), 2)))
 		tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rSPR(multi2di(sub_bac_tr50), 1, 1)))
-		#tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rNNI(multi2di(sub_bac_tr50))))
 		return(tmp)
 	}
 	
@@ -406,7 +398,7 @@ dev.off()
 Pval_distr_bac_df <- data.frame(1 - Pval_distr)
 colnames(Pval_distr_bac_df) <- "Pval_distr"
 h_bac <- ggplot(Pval_distr_bac_df, aes(x= Pval_distr)) + geom_histogram() + theme_bw() +
-		labs(x="P-values (Archeae)", y = "Distribution") + 
+		labs(x="P-values (Bacteria)", y = "Distribution") + 
 		scale_x_continuous(n.breaks = 10)
 
 pdf("P_distrib_bac.pdf", width=6, height=4)
