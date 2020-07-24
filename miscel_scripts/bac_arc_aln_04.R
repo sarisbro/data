@@ -16,7 +16,7 @@ library(ape)
 library(phangorn)
 library(foreach)
 library(doMC)
-registerDoMC(cores=10)
+registerDoMC(cores=20)
 
 
 #############
@@ -225,13 +225,13 @@ pdf("trees_arc.pdf", width=10, height=10)
 par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1), mfrow=c(1,2))
 
 #plot(arc_tr, type="u", show.tip.label=F, no.margin=T)
-plot(arc_tr, direction="r", show.tip.label=F, no.margin=T)
+plot(ladderize(arc_tr), direction="r", show.tip.label=F, no.margin=T)
 text(1.3, .1, "Archeae -- full aln", font = 2)
 tiplabels("o", bin_pos_arc, frame = "n", adj = -2.5, col="red")
 add.scale.bar()
 
 #plot(arc_tr50, type="u", show.tip.label=F, no.margin=T)
-plot(arc_tr50, direction="l", show.tip.label=F, no.margin=T)
+plot(ladderize(arc_tr50), direction="l", show.tip.label=F, no.margin=T)
 text(.9, .1, "Archeae -- 1/2 gap aln", font = 2)
 tiplabels("o", bin_pos_arc50, frame = "n", adj = 2.5, col="red")
 add.scale.bar()
@@ -243,12 +243,12 @@ dev.off()
 
 
 # bac
-bac_tr <- read.tree("bac_concat_edited_trimal_gappy.tre")
+bac_tr <- read.tree("bac_concat_aln_50_trimal_gappy.tre")
 bin_pos_bac <- grep("^Bin", bac_tr$tip.label)
 tmp_root_bac <- bac_tr$tip.label[bin_pos_bac][1]
 bac_tr <- root(bac_tr, tmp_root_bac, resolve.root=T)
 
-bac_tr50 <- read.tree("bac_concat_edited_trimal_gappy-half.tre")
+bac_tr50 <- read.tree("bac_concat_aln_50_trimal_gappy-half.tre")
 bin_pos_bac50 <- grep("^Bin", bac_tr50$tip.label)
 bac_tr50 <- root(bac_tr50, tmp_root_bac, resolve.root=T)
 
@@ -256,13 +256,13 @@ pdf("trees_bac.pdf", width=10, height=10)
 par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1), mfrow=c(1,2))
 
 #plot(bac_tr, type="u", show.tip.label=F, no.margin=T)
-plot(bac_tr, direction="r", show.tip.label=F, no.margin=T)
+plot(ladderize(bac_tr), direction="r", show.tip.label=F, no.margin=T)
 text(1.3, .1, "Bacteria -- full aln", font = 2)
 tiplabels("o", bin_pos_bac, frame = "n", adj = -2.5, col="red")
 add.scale.bar()
 
 #plot(bac_tr50, type="u", show.tip.label=F, no.margin=T)
-plot(bac_tr50, direction="l", show.tip.label=F, no.margin=T)
+plot(ladderize(bac_tr50), direction="l", show.tip.label=F, no.margin=T)
 text(.9, .1, "Bacteria -- 1/2 gap aln", font = 2)
 tiplabels("o", bin_pos_bac50, frame = "n", adj = 2.5, col="red")
 add.scale.bar()
@@ -279,79 +279,147 @@ dev.off()
 arc_tr <- read.tree("arc_concat_edited_trimal_gappy.tre")
 arc_tr50 <- read.tree("arc_concat_edited_trimal_gappy-half.tre")
 
-RF_dist_obs <- as.numeric(dist.topo(multi2di(arc_tr), multi2di(arc_tr50)))
+nb_seq <- length(arc_tr$tip.label)
+rm_percent <- 90
+NREPS <- 500
+Pval_distr <- NULL
+RF_dist_rSPR_arc_all <- arc_hist_all <- list()
 
-Nreps <- 10000
-RF_dist_rSPR_arc <- NULL
-counter_arc <- 0
-
-RF_dist_rSPR_arc <- foreach(i = 1: Nreps, .combine='rbind')%dopar%{
-	if(!(i %% 25)){
-		print(paste0("Now doing ", i, "/", Nreps))
+for(k in 1:NREPS){
+	print(paste0("--- Rep ", k, "/", NREPS, " ---"))
+	seq2rm <- sample(arc_tr$tip.label, floor(nb_seq * rm_percent / 100), replace = F)
+	
+	sub_arc_tr <- drop.tip(arc_tr, seq2rm)
+	sub_arc_tr50 <- drop.tip(arc_tr50, seq2rm)
+	
+	RF_dist_obs <- as.numeric(dist.topo(multi2di(sub_arc_tr), multi2di(sub_arc_tr50)))
+	
+	Nreps <- 1000
+	RF_dist_rSPR_arc <- NULL
+	counter_arc <- 0
+	
+	RF_dist_rSPR_arc <- foreach(i = 1: Nreps, .combine='rbind')%dopar%{
+		if(!(i %% 100)){
+			print(paste0("Now doing ", i, "/", Nreps))
+		}
+		#tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rSPR(multi2di(sub_arc_tr50), 2)))
+		tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rSPR(multi2di(sub_arc_tr50), 1, 1)))
+		#tmp <- as.numeric(dist.topo(multi2di(sub_arc_tr), rNNI(multi2di(sub_arc_tr50))))
+		return(tmp)
 	}
-	#tmp <- as.numeric(dist.topo(multi2di(arc_tr), rSPR(multi2di(arc_tr50), 2)))
-	tmp <- as.numeric(dist.topo(multi2di(arc_tr), rSPR(multi2di(arc_tr50), 1)))
-	if(tmp < RF_dist_obs){
-		counter_arc <- counter_arc + 1
-	}
-	return(tmp)
-}
-
-RF_dist_rSPR_arc_df <- data.frame(RF_dist_rSPR_arc)
-
-h1 <- ggplot(RF_dist_rSPR_arc_df, aes(x=RF_dist_rSPR_arc)) + geom_histogram() + theme_bw() +
-		labs(x="RF distance after SPR", y = "Distribution") +
-		scale_x_continuous(n.breaks = 10) + 
-		geom_vline(xintercept = RF_dist_obs, col="red", linetype="longdash") +
-		geom_text(x=675, y=1200, label=paste0("P < ", format(round(counter_arc / Nreps, 2), nsmall = 2)), col="red")
-
-save(RF_dist_rSPR_arc_df, counter_arc, file="RF_dist_rSPR_arc_df.RData")
-save.image("bac_arc_aln_04.RData")
-
-
-
-# bac 
-bac_tr <- read.tree("bac_concat_edited_trimal_gappy.tre")
-bac_tr50 <- read.tree("bac_concat_edited_trimal_gappy-half.tre")
-
-RF_dist_obs <- as.numeric(dist.topo(multi2di(bac_tr), multi2di(bac_tr50)))
-
-Nreps <- 10000
-RF_dist_rSPR_bac <- NULL
-counter_bac <- 0
-
-RF_dist_rSPR_bac <- foreach(i = 1: Nreps, .combine='rbind')%dopar%{
-	if(!(i %% 25)){
-		print(paste0("Now doing ", i, "/", Nreps))
-	}
-	#tmp <- as.numeric(dist.topo(multi2di(bac_tr), rSPR(multi2di(bac_tr50), 2)))
-	tmp <- as.numeric(dist.topo(multi2di(bac_tr), rSPR(multi2di(bac_tr50), 1)))
-	if(tmp < RF_dist_obs){
-		counter_bac <- counter_bac + 1
-	}
-	return(tmp)
-}
-
-RF_dist_rSPR_bac_df <- data.frame(RF_dist_rSPR_bac)
-
-h2 <- ggplot(RF_dist_rSPR_bac_df, aes(x=RF_dist_rSPR_bac)) + geom_histogram() + theme_bw() +
+	
+	counter_arc <- sum(RF_dist_rSPR_arc < RF_dist_obs)
+	RF_dist_rSPR_arc_all[[k]] <- RF_dist_rSPR_arc
+	Pval_distr[k] <- counter_arc / Nreps
+	RF_dist_rSPR_arc_df <- data.frame(RF_dist_rSPR_arc)
+	arc_hist_all[[k]] <- ggplot(RF_dist_rSPR_arc_df, aes(x=RF_dist_rSPR_arc)) + geom_histogram(binwidth=1) + theme_bw() +
 		labs(x="RF distance after SPR", y = "Distribution") + 
 		scale_x_continuous(n.breaks = 10) + 
 		geom_vline(xintercept = RF_dist_obs, col="red", linetype="longdash") +
-		geom_text(x=690, y=100, label=paste0("P < ", format(round(counter_bac / Nreps, 2), nsmall = 2)), col="red")
+		geom_text(x=max(RF_dist_rSPR_arc) - 20, y=80, label=paste0("P = ", format(round(counter_arc / Nreps, 4), nsmall = 4)), col="red")
 
-save(RF_dist_rSPR_bac_df, counter_bac, file="RF_dist_rSPR_bac_df.RData")
+}
 
 
+pdf("RF_dist_distrib_arc.pdf", width=16, height=16)
+grid.arrange( arc_hist_all[[1]], arc_hist_all[[2]], arc_hist_all[[3]], arc_hist_all[[4]], arc_hist_all[[5]], 
+			  arc_hist_all[[6]], arc_hist_all[[7]], arc_hist_all[[8]], arc_hist_all[[9]], arc_hist_all[[10]], 
+			  arc_hist_all[[11]], arc_hist_all[[12]], arc_hist_all[[13]], arc_hist_all[[14]], arc_hist_all[[15]], 
+			  arc_hist_all[[16]], arc_hist_all[[17]], arc_hist_all[[18]], arc_hist_all[[19]], arc_hist_all[[20]], 
+	nrow = 4
+)
+dev.off()
 
-pdf("RF_dist_distrib.pdf", width=6, height=4)
-grid.arrange( h1, #h2,
+
+Pval_distr_arc_df <- data.frame(1 - Pval_distr)
+colnames(Pval_distr_arc_df) <- "Pval_distr"
+h_arc <- ggplot(Pval_distr_arc_df, aes(x= Pval_distr)) + geom_histogram() + theme_bw() +
+		labs(x="P-values (Archeae)", y = "Distribution") + 
+		scale_x_continuous(n.breaks = 10)
+
+pdf("P_distrib_arc.pdf", width=6, height=4)
+grid.arrange( h_arc, 
 	nrow = 1
 )
 dev.off()
 
 
-save.image("bac_arc_aln_04.RData")
+save.image("bac_arc_aln_05.RData")
+
+
+# bac 
+bac_tr <- read.tree("bac_concat_aln_50_trimal_gappy.tre")
+bac_tr50 <- read.tree("bac_concat_aln_50_trimal_gappy-half.tre")
+
+nb_seq <- length(bac_tr$tip.label)
+rm_percent <- 90
+NREPS <- 500
+Pval_distr <- NULL
+RF_dist_rSPR_bac_all <- bac_hist_all <- list()
+
+for(k in 1:NREPS){
+	print(paste0("--- Rep ", k, "/", NREPS, " ---"))
+	seq2rm <- sample(bac_tr$tip.label, floor(nb_seq * rm_percent / 100), replace = F)
+	
+	sub_bac_tr <- drop.tip(bac_tr, seq2rm)
+	sub_bac_tr50 <- drop.tip(bac_tr50, seq2rm)
+	
+	RF_dist_obs <- as.numeric(dist.topo(multi2di(sub_bac_tr), multi2di(sub_bac_tr50)))
+	
+	Nreps <- 1000
+	RF_dist_rSPR_bac <- NULL
+	counter_bac <- 0
+	
+	RF_dist_rSPR_bac <- foreach(i = 1: Nreps, .combine='rbind')%dopar%{
+		if(!(i %% 100)){
+			print(paste0("Now doing ", i, "/", Nreps))
+		}
+		#tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rSPR(multi2di(sub_bac_tr50), 2)))
+		tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rSPR(multi2di(sub_bac_tr50), 1, 1)))
+		#tmp <- as.numeric(dist.topo(multi2di(sub_bac_tr), rNNI(multi2di(sub_bac_tr50))))
+		return(tmp)
+	}
+	
+	counter_bac <- sum(RF_dist_rSPR_bac < RF_dist_obs)
+	RF_dist_rSPR_bac_all[[k]] <- RF_dist_rSPR_bac
+	Pval_distr[k] <- counter_bac / Nreps
+	RF_dist_rSPR_bac_df <- data.frame(RF_dist_rSPR_bac)
+	bac_hist_all[[k]] <- ggplot(RF_dist_rSPR_bac_df, aes(x=RF_dist_rSPR_bac)) + geom_histogram(binwidth=1) + theme_bw() +
+		labs(x="RF distance after SPR", y = "Distribution") + 
+		scale_x_continuous(n.breaks = 10) + 
+		geom_vline(xintercept = RF_dist_obs, col="red", linetype="longdash") +
+		geom_text(x=max(RF_dist_rSPR_bac) - 20, y=80, label=paste0("P = ", format(round(counter_bac / Nreps, 4), nsmall = 4)), col="red")
+
+}
+
+
+pdf("RF_dist_distrib_bac.pdf", width=16, height=16)
+grid.arrange( bac_hist_all[[1]], bac_hist_all[[2]], bac_hist_all[[3]], bac_hist_all[[4]], bac_hist_all[[5]], 
+			  bac_hist_all[[6]], bac_hist_all[[7]], bac_hist_all[[8]], bac_hist_all[[9]], bac_hist_all[[10]], 
+			  bac_hist_all[[11]], bac_hist_all[[12]], bac_hist_all[[13]], bac_hist_all[[14]], bac_hist_all[[15]], 
+			  bac_hist_all[[16]], bac_hist_all[[17]], bac_hist_all[[18]], bac_hist_all[[19]], bac_hist_all[[20]], 
+	nrow = 4
+)
+dev.off()
+
+
+Pval_distr_bac_df <- data.frame(1 - Pval_distr)
+colnames(Pval_distr_bac_df) <- "Pval_distr"
+h_bac <- ggplot(Pval_distr_bac_df, aes(x= Pval_distr)) + geom_histogram() + theme_bw() +
+		labs(x="P-values (Archeae)", y = "Distribution") + 
+		scale_x_continuous(n.breaks = 10)
+
+pdf("P_distrib_bac.pdf", width=6, height=4)
+grid.arrange( h_bac, 
+	nrow = 1
+)
+dev.off()
+
+
+
+
+
+save.image("bac_arc_aln.RData")
 q("no")
 
 
