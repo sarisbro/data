@@ -325,7 +325,7 @@ grid.arrange( arc_hist_all[[1]], arc_hist_all[[2]], arc_hist_all[[3]], arc_hist_
 dev.off()
 
 
-Pval_distr_arc_df <- data.frame(1 - Pval_distr)
+Pval_distr_arc_df <- data.frame(Pval_distr)
 colnames(Pval_distr_arc_df) <- "Pval_distr"
 h_arc <- ggplot(Pval_distr_arc_df, aes(x= Pval_distr)) + geom_histogram() + theme_bw() +
 		labs(x="P-values (Archeae)", y = "Distribution") + 
@@ -395,11 +395,11 @@ grid.arrange( bac_hist_all[[1]], bac_hist_all[[2]], bac_hist_all[[3]], bac_hist_
 dev.off()
 
 
-Pval_distr_bac_df <- data.frame(1 - Pval_distr)
+Pval_distr_bac_df <- data.frame(Pval_distr)
 colnames(Pval_distr_bac_df) <- "Pval_distr"
 h_bac <- ggplot(Pval_distr_bac_df, aes(x= Pval_distr)) + geom_histogram() + theme_bw() +
 		labs(x="P-values (Bacteria)", y = "Distribution") + 
-		scale_x_continuous(n.breaks = 10)
+		scale_x_continuous(n.breaks = 5)
 
 pdf("P_distrib_bac.pdf", width=6, height=4)
 grid.arrange( h_bac, 
