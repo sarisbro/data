@@ -2,18 +2,19 @@ Additional data
 ===============
 
 Wallbank.ArisBrosou.tar.bz2:
-TBA
+Wellbank C. and Aris-Brosou S. Viral evolutionary dynamics predict Influenza-Like-Illnesses in patients.
+https://doi.org/10.1101/2021.01.31.429026
 
 API_scripts.zip (3 files):
 Aris-Brosou S., Parent L. and Ibeh N. 2019. Viral long-term evolutionary strategies favor stability over proliferation. Viruses. 11:677.
 https://doi.org/10.1101/539239
 
 AncHumScripts.tar.bz2:
-Aris-Brosou S. 2019. Direct evidence of an increasing mutational load in humans. Molecular Biology and Evolution.
+Aris-Brosou S. 2019. Direct evidence of an increasing mutational load in humans. Molecular Biology and Evolution. 36:2823–2829. 
 https://doi.org/10.1093/molbev/msz192
 
 LHDA_data.tar.bz2:
-Long G.S., Hussen M., Dench J. and Aris-Brosou S. In press. Identifying genetic determinants of complex phenotypes from whole genome sequence data. BMC Genomics. 20:470.
+Long G.S., Hussen M., Dench J. and Aris-Brosou S. 2019. Identifying genetic determinants of complex phenotypes from whole genome sequence data. BMC Genomics. 20:470.
 https://doi.org/10.1186/s12864-019-5820-0
 
 Byrne_etal_SeqAlignments.tar.bz2:
