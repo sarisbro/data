@@ -2,7 +2,7 @@ Additional data
 ===============
 
 Wallbank.ArisBrosou.tar.bz2:
-Wellbank C. and Aris-Brosou S. Viral evolutionary dynamics predict Influenza-Like-Illnesses in patients.
+Wellbank C. and Aris-Brosou S. 2021. Viral evolutionary dynamics predict Influenza-Like-Illnesses in patients.
 https://doi.org/10.1101/2021.01.31.429026
 
 API_scripts.zip (3 files):
