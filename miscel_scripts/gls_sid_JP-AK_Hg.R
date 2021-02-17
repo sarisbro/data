@@ -2,7 +2,7 @@
 # comparing GLS data for rhinoceros auklets sampled on both sides of the Pacific
 # (Japan [JP] and Alaska [AK]) in relation to environmental [THg] (total mercury)
 # during wintering.
-# GLS data are available from first author.
+# GLS data are available from the first author.
 
 
 # R CMD BATCH gls_sid_JP-AK_Hg.R &
@@ -32,7 +32,7 @@ library(foreach)
 library(plot3D)
 
 library(doMC)
-registerDoMC(cores=10)
+registerDoMC(cores=6)
 
 
 colo_AK_location <- c(-146.33888889, 59.43277778) # c(146° 20′ 20″ O, 59° 25′ 58″ N, ), according to https://www.latlong.net/degrees-minutes-seconds-to-decimal-degrees
@@ -1021,138 +1021,83 @@ closestEnvHgReadings <- function(cur_chunk, Hg_neighborhood){
 	return(cbind(cur_chunk, Hg_env_mean, Hg_env_sd, log10Hg_env_mean, log10Hg_env_sd))
 }
 
-# 10000000
-chunk_1_ak_envHg_10000000 <- closestEnvHgReadings(chunk_1_ak, 10000000)
-chunk_2_ak_envHg_10000000 <- closestEnvHgReadings(chunk_2_ak, 10000000)
-chunk_3_ak_envHg_10000000 <- closestEnvHgReadings(chunk_3_ak, 10000000)
-chunk_1_jp_envHg_10000000 <- closestEnvHgReadings(chunk_1_jp, 10000000)
-chunk_2_jp_envHg_10000000 <- closestEnvHgReadings(chunk_2_jp, 10000000)
-chunk_3_jp_envHg_10000000 <- closestEnvHgReadings(chunk_3_jp, 10000000)
+closestEnvHgReadingsPar <- function(cur_chunk, Hg_neighborhood){
+	# find closest [Hg] readings to each GLS data point
+	cur_chunk <- cur_chunk[complete.cases(cur_chunk),]
+	#Hg_neighborhood <- 500000  #1000 #100000 # size of neighborhood to compute mean [Hg], in meters
+	env_features <- NULL
+	env_features <- foreach(i = 1:length(cur_chunk[,1]), .combine=rbind)%dopar%{
+	#for(i in 1:length(cur_chunk[,1])){
+		Hg_env_mean <- Hg_env_sd <- log10Hg_env_mean <- log10Hg_env_sd <- NULL
+		print(paste0("Doing ", i, " out of ", length(cur_chunk[,1]), " hood size ", Hg_neighborhood))
+		# find closest Hg reading for focal GLS point
+		cur_dist_vect <- NULL
+		for(j in 1:length(Hg_AK_JP_df[,1])){
+			cur_dist_vect[j] <- distMeeus(c(cur_chunk$med_lon[i],cur_chunk$med_lat[i]), c(Hg_AK_JP_df$lon[j], Hg_AK_JP_df$lat[j]))
+		}
+		closest_pos <- which.min(cur_dist_vect)
+		# find neighborhood readings
+		tmp_Hg_env <- NULL
+		cur_dist_vect_neighbor <- NULL
+		for(j in 1:length(Hg_AK_JP_df[,1])){
+			cur_dist_vect_neighbor[j] <- distMeeus(c(Hg_AK_JP_df$lon[closest_pos], Hg_AK_JP_df$lat[closest_pos]), c(Hg_AK_JP_df$lon[j], Hg_AK_JP_df$lat[j]))
+		}
+		neighborhood_pos <- which(cur_dist_vect_neighbor <= Hg_neighborhood)
+		Hg_env_mean <- mean(10^(Hg_AK_JP_df$log10THg[neighborhood_pos]), na.rm=T)
+		Hg_env_sd <- sd(10^(Hg_AK_JP_df$log10THg[neighborhood_pos]), na.rm=T)
+		log10Hg_env_mean <- mean(Hg_AK_JP_df$log10THg[neighborhood_pos], na.rm=T)
+		log10Hg_env_sd <- sd(Hg_AK_JP_df$log10THg[neighborhood_pos], na.rm=T)
+		return(cbind(Hg_env_mean, Hg_env_sd, log10Hg_env_mean, log10Hg_env_sd))
+	}
+	return(cbind(cur_chunk, env_features))
+}
 
-# 9000000
-chunk_1_ak_envHg_9000000 <- closestEnvHgReadings(chunk_1_ak, 9000000)
-chunk_2_ak_envHg_9000000 <- closestEnvHgReadings(chunk_2_ak, 9000000)
-chunk_3_ak_envHg_9000000 <- closestEnvHgReadings(chunk_3_ak, 9000000)
-chunk_1_jp_envHg_9000000 <- closestEnvHgReadings(chunk_1_jp, 9000000)
-chunk_2_jp_envHg_9000000 <- closestEnvHgReadings(chunk_2_jp, 9000000)
-chunk_3_jp_envHg_9000000 <- closestEnvHgReadings(chunk_3_jp, 9000000)
+chunk_1_ak_envHg <- chunk_2_ak_envHg <- chunk_3_ak_envHg <- list()
+chunk_1_jp_envHg <- chunk_2_jp_envHg <- chunk_3_jp_envHg <- list()
 
-# 8000000
-chunk_1_ak_envHg_8000000 <- closestEnvHgReadings(chunk_1_ak, 8000000)
-chunk_2_ak_envHg_8000000 <- closestEnvHgReadings(chunk_2_ak, 8000000)
-chunk_3_ak_envHg_8000000 <- closestEnvHgReadings(chunk_3_ak, 8000000)
-chunk_1_jp_envHg_8000000 <- closestEnvHgReadings(chunk_1_jp, 8000000)
-chunk_2_jp_envHg_8000000 <- closestEnvHgReadings(chunk_2_jp, 8000000)
-chunk_3_jp_envHg_8000000 <- closestEnvHgReadings(chunk_3_jp, 8000000)
+# # this one takes *a while*
+# #for(neigh_size in seq(500, 30000, 10000)){
+# for(neigh_size in seq(500, 3000000, 10000)){
+# 	# ak
+# 	print(paste0("Now doing chunk_1_ak_envHg ", neigh_size))
+# 	chunk_1_ak_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_1_ak, neigh_size)
+# 	print(paste0("Now doing chunk_2_ak_envHg ", neigh_size))
+# 	chunk_2_ak_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_2_ak, neigh_size)
+# 	print(paste0("Now doing chunk_3_ak_envHg ", neigh_size))
+# 	chunk_3_ak_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_3_ak, neigh_size)
+# 	# jp
+# 	print(paste0("Now doing chunk_1_jp_envHg ", neigh_size))
+# 	chunk_1_jp_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_1_jp, neigh_size)
+# 	print(paste0("Now doing chunk_2_jp_envHg ", neigh_size))
+# 	chunk_2_jp_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_2_jp, neigh_size)
+# 	print(paste0("Now doing chunk_3_jp_envHg ", neigh_size))
+# 	chunk_3_jp_envHg[[neigh_size]] <- closestEnvHgReadings(chunk_3_jp, neigh_size)
+# }
 
-# 7000000
-chunk_1_ak_envHg_7000000 <- closestEnvHgReadings(chunk_1_ak, 7000000)
-chunk_2_ak_envHg_7000000 <- closestEnvHgReadings(chunk_2_ak, 7000000)
-chunk_3_ak_envHg_7000000 <- closestEnvHgReadings(chunk_3_ak, 7000000)
-chunk_1_jp_envHg_7000000 <- closestEnvHgReadings(chunk_1_jp, 7000000)
-chunk_2_jp_envHg_7000000 <- closestEnvHgReadings(chunk_2_jp, 7000000)
-chunk_3_jp_envHg_7000000 <- closestEnvHgReadings(chunk_3_jp, 7000000)
 
-# 6000000
-chunk_1_ak_envHg_6000000 <- closestEnvHgReadings(chunk_1_ak, 6000000)
-chunk_2_ak_envHg_6000000 <- closestEnvHgReadings(chunk_2_ak, 6000000)
-chunk_3_ak_envHg_6000000 <- closestEnvHgReadings(chunk_3_ak, 6000000)
-chunk_1_jp_envHg_6000000 <- closestEnvHgReadings(chunk_1_jp, 6000000)
-chunk_2_jp_envHg_6000000 <- closestEnvHgReadings(chunk_2_jp, 6000000)
-chunk_3_jp_envHg_6000000 <- closestEnvHgReadings(chunk_3_jp, 6000000)
-
-# 5000000
-chunk_1_ak_envHg_5000000 <- closestEnvHgReadings(chunk_1_ak, 5000000)
-chunk_2_ak_envHg_5000000 <- closestEnvHgReadings(chunk_2_ak, 5000000)
-chunk_3_ak_envHg_5000000 <- closestEnvHgReadings(chunk_3_ak, 5000000)
-chunk_1_jp_envHg_5000000 <- closestEnvHgReadings(chunk_1_jp, 5000000)
-chunk_2_jp_envHg_5000000 <- closestEnvHgReadings(chunk_2_jp, 5000000)
-chunk_3_jp_envHg_5000000 <- closestEnvHgReadings(chunk_3_jp, 5000000)
-
-# 4000000
-chunk_1_ak_envHg_4000000 <- closestEnvHgReadings(chunk_1_ak, 4000000)
-chunk_2_ak_envHg_4000000 <- closestEnvHgReadings(chunk_2_ak, 4000000)
-chunk_3_ak_envHg_4000000 <- closestEnvHgReadings(chunk_3_ak, 4000000)
-chunk_1_jp_envHg_4000000 <- closestEnvHgReadings(chunk_1_jp, 4000000)
-chunk_2_jp_envHg_4000000 <- closestEnvHgReadings(chunk_2_jp, 4000000)
-chunk_3_jp_envHg_4000000 <- closestEnvHgReadings(chunk_3_jp, 4000000)
-
-# 3000000
-chunk_1_ak_envHg_3000000 <- closestEnvHgReadings(chunk_1_ak, 3000000)
-chunk_2_ak_envHg_3000000 <- closestEnvHgReadings(chunk_2_ak, 3000000)
-chunk_3_ak_envHg_3000000 <- closestEnvHgReadings(chunk_3_ak, 3000000)
-chunk_1_jp_envHg_3000000 <- closestEnvHgReadings(chunk_1_jp, 3000000)
-chunk_2_jp_envHg_3000000 <- closestEnvHgReadings(chunk_2_jp, 3000000)
-chunk_3_jp_envHg_3000000 <- closestEnvHgReadings(chunk_3_jp, 3000000)
-
-# 2000000
-chunk_1_ak_envHg_2000000 <- closestEnvHgReadings(chunk_1_ak, 2000000)
-chunk_2_ak_envHg_2000000 <- closestEnvHgReadings(chunk_2_ak, 2000000)
-chunk_3_ak_envHg_2000000 <- closestEnvHgReadings(chunk_3_ak, 2000000)
-chunk_1_jp_envHg_2000000 <- closestEnvHgReadings(chunk_1_jp, 2000000)
-chunk_2_jp_envHg_2000000 <- closestEnvHgReadings(chunk_2_jp, 2000000)
-chunk_3_jp_envHg_2000000 <- closestEnvHgReadings(chunk_3_jp, 2000000)
-
-# 1000000
-chunk_1_ak_envHg_1000000 <- closestEnvHgReadings(chunk_1_ak, 1000000)
-chunk_2_ak_envHg_1000000 <- closestEnvHgReadings(chunk_2_ak, 1000000)
-chunk_3_ak_envHg_1000000 <- closestEnvHgReadings(chunk_3_ak, 1000000)
-chunk_1_jp_envHg_1000000 <- closestEnvHgReadings(chunk_1_jp, 1000000)
-chunk_2_jp_envHg_1000000 <- closestEnvHgReadings(chunk_2_jp, 1000000)
-chunk_3_jp_envHg_1000000 <- closestEnvHgReadings(chunk_3_jp, 1000000)
-
-# 750000
-chunk_1_ak_envHg_750000 <- closestEnvHgReadings(chunk_1_ak, 750000)
-chunk_2_ak_envHg_750000 <- closestEnvHgReadings(chunk_2_ak, 750000)
-chunk_3_ak_envHg_750000 <- closestEnvHgReadings(chunk_3_ak, 750000)
-chunk_1_jp_envHg_750000 <- closestEnvHgReadings(chunk_1_jp, 750000)
-chunk_2_jp_envHg_750000 <- closestEnvHgReadings(chunk_2_jp, 750000)
-chunk_3_jp_envHg_750000 <- closestEnvHgReadings(chunk_3_jp, 750000)
-
-# 500000
-chunk_1_ak_envHg_500000 <- closestEnvHgReadings(chunk_1_ak, 500000)
-chunk_2_ak_envHg_500000 <- closestEnvHgReadings(chunk_2_ak, 500000)
-chunk_3_ak_envHg_500000 <- closestEnvHgReadings(chunk_3_ak, 500000)
-chunk_1_jp_envHg_500000 <- closestEnvHgReadings(chunk_1_jp, 500000)
-chunk_2_jp_envHg_500000 <- closestEnvHgReadings(chunk_2_jp, 500000)
-chunk_3_jp_envHg_500000 <- closestEnvHgReadings(chunk_3_jp, 500000)
-
-# 75000
-chunk_1_ak_envHg_75000 <- closestEnvHgReadings(chunk_1_ak, 75000)
-chunk_2_ak_envHg_75000 <- closestEnvHgReadings(chunk_2_ak, 75000)
-chunk_3_ak_envHg_75000 <- closestEnvHgReadings(chunk_3_ak, 75000)
-chunk_1_jp_envHg_75000 <- closestEnvHgReadings(chunk_1_jp, 75000)
-chunk_2_jp_envHg_75000 <- closestEnvHgReadings(chunk_2_jp, 75000)
-chunk_3_jp_envHg_75000 <- closestEnvHgReadings(chunk_3_jp, 75000)
-
-# 50000
-chunk_1_ak_envHg_50000 <- closestEnvHgReadings(chunk_1_ak, 50000)
-chunk_2_ak_envHg_50000 <- closestEnvHgReadings(chunk_2_ak, 50000)
-chunk_3_ak_envHg_50000 <- closestEnvHgReadings(chunk_3_ak, 50000)
-chunk_1_jp_envHg_50000 <- closestEnvHgReadings(chunk_1_jp, 50000)
-chunk_2_jp_envHg_50000 <- closestEnvHgReadings(chunk_2_jp, 50000)
-chunk_3_jp_envHg_50000 <- closestEnvHgReadings(chunk_3_jp, 50000)
-
-# 5000
-chunk_1_ak_envHg_5000 <- closestEnvHgReadings(chunk_1_ak, 5000)
-chunk_2_ak_envHg_5000 <- closestEnvHgReadings(chunk_2_ak, 5000)
-chunk_3_ak_envHg_5000 <- closestEnvHgReadings(chunk_3_ak, 5000)
-chunk_1_jp_envHg_5000 <- closestEnvHgReadings(chunk_1_jp, 5000)
-chunk_2_jp_envHg_5000 <- closestEnvHgReadings(chunk_2_jp, 5000)
-chunk_3_jp_envHg_5000 <- closestEnvHgReadings(chunk_3_jp, 5000)
-
-# 500
-chunk_1_ak_envHg_500 <- closestEnvHgReadings(chunk_1_ak, 500)
-chunk_2_ak_envHg_500 <- closestEnvHgReadings(chunk_2_ak, 500)
-chunk_3_ak_envHg_500 <- closestEnvHgReadings(chunk_3_ak, 500)
-chunk_1_jp_envHg_500 <- closestEnvHgReadings(chunk_1_jp, 500)
-chunk_2_jp_envHg_500 <- closestEnvHgReadings(chunk_2_jp, 500)
-chunk_3_jp_envHg_500 <- closestEnvHgReadings(chunk_3_jp, 500)
+# this one is much faster!
+#for(neigh_size in seq(500, 30000, 10000)){
+for(neigh_size in seq(500, 3000000, 10000)){
+	# ak
+	print(paste0("Now doing chunk_1_ak_envHg ", neigh_size))
+	chunk_1_ak_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_1_ak, neigh_size)
+	print(paste0("Now doing chunk_2_ak_envHg ", neigh_size))
+	chunk_2_ak_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_2_ak, neigh_size)
+	print(paste0("Now doing chunk_3_ak_envHg ", neigh_size))
+	chunk_3_ak_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_3_ak, neigh_size)
+	# jp
+	print(paste0("Now doing chunk_1_jp_envHg ", neigh_size))
+	chunk_1_jp_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_1_jp, neigh_size)
+	print(paste0("Now doing chunk_2_jp_envHg ", neigh_size))
+	chunk_2_jp_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_2_jp, neigh_size)
+	print(paste0("Now doing chunk_3_jp_envHg ", neigh_size))
+	chunk_3_jp_envHg[[neigh_size]] <- closestEnvHgReadingsPar(chunk_3_jp, neigh_size)
+}
 
 
 
 
-save.image("salt_2017_ak_jp_all.RData")
+save.image("210215_salt_2017_ak_jp_all.RData")
 
 
 
@@ -1177,3307 +1122,213 @@ chunk_Hg_data <- function(cur_chunk, bird_hg){
 	return(cbind(cur_chunk, chunk_bird_blood_log10Hg, chunk_bird_breast_log10Hg, chunk_bird_retrix_log10Hg))
 }
 
-# 10000000
-chunk_1_ak_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_1_ak_envHg_10000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_2_ak_envHg_10000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_3_ak_envHg_10000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_1_jp_envHg_10000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_2_jp_envHg_10000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_10000000 <- chunk_Hg_data(chunk_3_jp_envHg_10000000, bird_hg_jp)
+chunk_1_ak_envHg_birdHg <- chunk_2_ak_envHg_birdHg <- chunk_3_ak_envHg_birdHg <- list()
+chunk_1_jp_envHg_birdHg <- chunk_2_jp_envHg_birdHg <- chunk_3_jp_envHg_birdHg <- list()
 
-# 9000000
-chunk_1_ak_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_1_ak_envHg_9000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_2_ak_envHg_9000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_3_ak_envHg_9000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_1_jp_envHg_9000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_2_jp_envHg_9000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_9000000 <- chunk_Hg_data(chunk_3_jp_envHg_9000000, bird_hg_jp)
+# super quick to run
+for(neigh_size in seq(500, 210500, 10000)){
+#for(neigh_size in seq(500, 3000000, 10000)){
+	# ak
+	print(paste0("Now doing chunk_1_ak_envHg ", neigh_size))
+	chunk_1_ak_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_1_ak_envHg[[neigh_size]], bird_hg_ak)
+	print(paste0("Now doing chunk_2_ak_envHg ", neigh_size))
+	chunk_2_ak_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_2_ak_envHg[[neigh_size]], bird_hg_ak)
+	print(paste0("Now doing chunk_3_ak_envHg ", neigh_size))
+	chunk_3_ak_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_3_ak_envHg[[neigh_size]], bird_hg_ak)
+	# jp
+	print(paste0("Now doing chunk_1_jp_envHg ", neigh_size))
+	chunk_1_jp_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_1_jp_envHg[[neigh_size]], bird_hg_jp)
+	print(paste0("Now doing chunk_2_jp_envHg ", neigh_size))
+	chunk_2_jp_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_2_jp_envHg[[neigh_size]], bird_hg_jp)
+	print(paste0("Now doing chunk_3_jp_envHg ", neigh_size))
+	chunk_3_jp_envHg_birdHg[[neigh_size]] <- chunk_Hg_data(chunk_3_jp_envHg[[neigh_size]], bird_hg_jp)
 
-# 8000000
-chunk_1_ak_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_1_ak_envHg_8000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_2_ak_envHg_8000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_3_ak_envHg_8000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_1_jp_envHg_8000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_2_jp_envHg_8000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_8000000 <- chunk_Hg_data(chunk_3_jp_envHg_8000000, bird_hg_jp)
-
-# 7000000
-chunk_1_ak_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_1_ak_envHg_7000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_2_ak_envHg_7000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_3_ak_envHg_7000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_1_jp_envHg_7000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_2_jp_envHg_7000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_7000000 <- chunk_Hg_data(chunk_3_jp_envHg_7000000, bird_hg_jp)
-
-# 6000000
-chunk_1_ak_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_1_ak_envHg_6000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_2_ak_envHg_6000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_3_ak_envHg_6000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_1_jp_envHg_6000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_2_jp_envHg_6000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_6000000 <- chunk_Hg_data(chunk_3_jp_envHg_6000000, bird_hg_jp)
-
-# 5000000
-chunk_1_ak_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_1_ak_envHg_5000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_2_ak_envHg_5000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_3_ak_envHg_5000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_1_jp_envHg_5000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_2_jp_envHg_5000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_5000000 <- chunk_Hg_data(chunk_3_jp_envHg_5000000, bird_hg_jp)
-
-# 4000000
-chunk_1_ak_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_1_ak_envHg_4000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_2_ak_envHg_4000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_3_ak_envHg_4000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_1_jp_envHg_4000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_2_jp_envHg_4000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_4000000 <- chunk_Hg_data(chunk_3_jp_envHg_4000000, bird_hg_jp)
-
-# 3000000
-chunk_1_ak_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_1_ak_envHg_3000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_2_ak_envHg_3000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_3_ak_envHg_3000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_1_jp_envHg_3000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_2_jp_envHg_3000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_3000000 <- chunk_Hg_data(chunk_3_jp_envHg_3000000, bird_hg_jp)
-
-# 2000000
-chunk_1_ak_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_1_ak_envHg_2000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_2_ak_envHg_2000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_3_ak_envHg_2000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_1_jp_envHg_2000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_2_jp_envHg_2000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_2000000 <- chunk_Hg_data(chunk_3_jp_envHg_2000000, bird_hg_jp)
-
-# 1000000
-chunk_1_ak_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_1_ak_envHg_1000000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_2_ak_envHg_1000000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_3_ak_envHg_1000000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_1_jp_envHg_1000000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_2_jp_envHg_1000000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_1000000 <- chunk_Hg_data(chunk_3_jp_envHg_1000000, bird_hg_jp)
-
-# 750000
-chunk_1_ak_envHg_birdHg_750000 <- chunk_Hg_data(chunk_1_ak_envHg_750000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_750000 <- chunk_Hg_data(chunk_2_ak_envHg_750000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_750000 <- chunk_Hg_data(chunk_3_ak_envHg_750000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_750000 <- chunk_Hg_data(chunk_1_jp_envHg_750000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_750000 <- chunk_Hg_data(chunk_2_jp_envHg_750000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_750000 <- chunk_Hg_data(chunk_3_jp_envHg_750000, bird_hg_jp)
-
-# 500000
-chunk_1_ak_envHg_birdHg_500000 <- chunk_Hg_data(chunk_1_ak_envHg_500000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_500000 <- chunk_Hg_data(chunk_2_ak_envHg_500000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_500000 <- chunk_Hg_data(chunk_3_ak_envHg_500000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_500000 <- chunk_Hg_data(chunk_1_jp_envHg_500000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_500000 <- chunk_Hg_data(chunk_2_jp_envHg_500000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_500000 <- chunk_Hg_data(chunk_3_jp_envHg_500000, bird_hg_jp)
-
-# 75000
-chunk_1_ak_envHg_birdHg_75000 <- chunk_Hg_data(chunk_1_ak_envHg_75000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_75000 <- chunk_Hg_data(chunk_2_ak_envHg_75000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_75000 <- chunk_Hg_data(chunk_3_ak_envHg_75000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_75000 <- chunk_Hg_data(chunk_1_jp_envHg_75000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_75000 <- chunk_Hg_data(chunk_2_jp_envHg_75000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_75000 <- chunk_Hg_data(chunk_3_jp_envHg_75000, bird_hg_jp)
-
-# 50000
-chunk_1_ak_envHg_birdHg_50000 <- chunk_Hg_data(chunk_1_ak_envHg_50000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_50000 <- chunk_Hg_data(chunk_2_ak_envHg_50000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_50000 <- chunk_Hg_data(chunk_3_ak_envHg_50000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_50000 <- chunk_Hg_data(chunk_1_jp_envHg_50000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_50000 <- chunk_Hg_data(chunk_2_jp_envHg_50000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_50000 <- chunk_Hg_data(chunk_3_jp_envHg_50000, bird_hg_jp)
-
-# 5000
-chunk_1_ak_envHg_birdHg_5000 <- chunk_Hg_data(chunk_1_ak_envHg_5000, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_5000 <- chunk_Hg_data(chunk_2_ak_envHg_5000, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_5000 <- chunk_Hg_data(chunk_3_ak_envHg_5000, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_5000 <- chunk_Hg_data(chunk_1_jp_envHg_5000, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_5000 <- chunk_Hg_data(chunk_2_jp_envHg_5000, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_5000 <- chunk_Hg_data(chunk_3_jp_envHg_5000, bird_hg_jp)
-
-# 500
-chunk_1_ak_envHg_birdHg_500 <- chunk_Hg_data(chunk_1_ak_envHg_500, bird_hg_ak)
-chunk_2_ak_envHg_birdHg_500 <- chunk_Hg_data(chunk_2_ak_envHg_500, bird_hg_ak)
-chunk_3_ak_envHg_birdHg_500 <- chunk_Hg_data(chunk_3_ak_envHg_500, bird_hg_ak)
-chunk_1_jp_envHg_birdHg_500 <- chunk_Hg_data(chunk_1_jp_envHg_500, bird_hg_jp)
-chunk_2_jp_envHg_birdHg_500 <- chunk_Hg_data(chunk_2_jp_envHg_500, bird_hg_jp)
-chunk_3_jp_envHg_birdHg_500 <- chunk_Hg_data(chunk_3_jp_envHg_500, bird_hg_jp)
-
-
-
-# # ploting results
-# envHg_10000000 <- list()
-# 
-# # chunk_1:3
-# #dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_10000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_10000000, Region="JP")))
-# dat_Hg_env_bird <- data.frame(rbind(
-# 									cbind(chunk_1_ak_envHg_birdHg_10000000, Region="AK"), 
-# 									cbind(chunk_1_jp_envHg_birdHg_10000000, Region="JP"),
-# 									cbind(chunk_2_ak_envHg_birdHg_10000000, Region="AK"), 
-# 									cbind(chunk_2_jp_envHg_birdHg_10000000, Region="JP"),
-# 									cbind(chunk_3_ak_envHg_birdHg_10000000, Region="AK"), 
-# 									cbind(chunk_3_jp_envHg_birdHg_10000000, Region="JP")
-# 									))
-# # blood
-# envHg_10000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # breast
-# envHg_10000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position=c(.1, .2)) +
-#   labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # retrix
-# envHg_10000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# 
-# # chunk_2
-# dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_10000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_10000000, Region="JP")))
-# # blood
-# envHg_10000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # breast
-# envHg_10000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # retrix
-# envHg_10000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# 
-# # chunk_3
-# dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_10000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_10000000, Region="JP")))
-# # blood
-# envHg_10000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # breast
-# envHg_10000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # retrix
-# envHg_10000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# 
-# # chunk_1
-# dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_10000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_10000000, Region="JP")))
-# # blood
-# envHg_10000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # breast
-# envHg_10000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# # retrix
-# envHg_10000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-#   geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-#   stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-#   #xlim(0,160) +
-#   theme_bw() + theme(legend.position="none") +
-#   labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-#                     "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-#   ))
-# 
-# 
-# pdf("bird_envHg_10000000.pdf", height=10, width=15)
-# grid.arrange(#envHg_10000000[[1]], envHg_10000000[[2]], envHg_10000000[[3]],
-# 			 envHg_10000000[[10]], envHg_10000000[[11]], envHg_10000000[[12]],
-# 			 envHg_10000000[[4]], envHg_10000000[[5]], envHg_10000000[[6]],
-# 			 envHg_10000000[[7]], envHg_10000000[[8]], envHg_10000000[[9]],
-# 			 nrow=3)
-# dev.off()
-
+}
 
 
 # ploting results
-envHg_9000000 <- list()
 
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_9000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_9000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_9000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_9000000, Region="JP")
-									))
-# blood
-envHg_9000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_9000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_9000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
+BirdBlood_vs_envHg1 <- BirdBreast_vs_envHg1 <- BirdRectrix_vs_envHg1 <- list()
+BirdBlood_vs_envHg2 <- BirdBreast_vs_envHg2 <- BirdRectrix_vs_envHg2 <- list()
+BirdBlood_vs_envHg3 <- BirdBreast_vs_envHg3 <- BirdRectrix_vs_envHg3 <- list()
+
+for(neigh_size in seq(500, 210500, 10000)){
+#for(neigh_size in seq(500, 3000000, 10000)){
+	# stage_1
+	dat_Hg_env_bird <- data.frame(rbind(
+		cbind(chunk_1_ak_envHg_birdHg[[neigh_size]], Region="AK"), 
+		cbind(chunk_1_jp_envHg_birdHg[[neigh_size]], Region="JP")
+	))
+	BirdBlood_vs_envHg1[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_1:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdBreast_vs_envHg1[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_1:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdRectrix_vs_envHg1[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position=c(.1, .2)) +
+	  labs(title=paste0("stage_1:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	# stage_2
+	dat_Hg_env_bird <- data.frame(rbind(
+		cbind(chunk_2_ak_envHg_birdHg[[neigh_size]], Region="AK"), 
+		cbind(chunk_2_jp_envHg_birdHg[[neigh_size]], Region="JP")
+	))
+	BirdBlood_vs_envHg2[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_2:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdBreast_vs_envHg2[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_2:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdRectrix_vs_envHg2[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_2:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	# stage_3
+	dat_Hg_env_bird <- data.frame(rbind(
+		cbind(chunk_3_ak_envHg_birdHg[[neigh_size]], Region="AK"), 
+		cbind(chunk_3_jp_envHg_birdHg[[neigh_size]], Region="JP")
+	))
+	BirdBlood_vs_envHg3[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_3:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdBreast_vs_envHg3[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_3:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+	BirdRectrix_vs_envHg3[[neigh_size]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
+	  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
+	  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
+	  #xlim(0,160) +
+	  theme_bw() + theme(legend.position="none") +
+	  labs(title=paste0("stage_3:", neigh_size,"m; P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
+	                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
+	  ))
+
+	pdf(paste0("210215_bird_envHg_all_", neigh_size,".pdf"), height=10, width=15)
+	grid.arrange(
+				 BirdRectrix_vs_envHg1[[neigh_size]], BirdRectrix_vs_envHg2[[neigh_size]], BirdRectrix_vs_envHg3[[neigh_size]], 
+				 BirdBreast_vs_envHg1[[neigh_size]], BirdBreast_vs_envHg2[[neigh_size]], BirdBreast_vs_envHg3[[neigh_size]], 
+				 BirdBlood_vs_envHg1[[neigh_size]], BirdBlood_vs_envHg2[[neigh_size]], BirdBlood_vs_envHg3[[neigh_size]], 
+				 nrow=3)
+	dev.off()
 
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_9000000, Region="JP")))
-# blood
-envHg_9000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_9000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_9000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
+	pdf(paste0("210215_bird_envHg_focused_", neigh_size,".pdf"), height=4, width=12)
+	grid.arrange(
+				 BirdRectrix_vs_envHg1[[neigh_size]], 
+				 BirdBreast_vs_envHg2[[neigh_size]], 
+				 nrow=1)
+	dev.off()
 
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_9000000, Region="JP")))
-# blood
-envHg_9000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_9000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_9000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
 
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_9000000, Region="JP")))
-# blood
-envHg_9000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_9000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_9000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
+}
 
 
-pdf("bird_envHg_9000000.pdf", height=10, width=15)
-grid.arrange(#envHg_9000000[[1]], envHg_9000000[[2]], envHg_9000000[[3]],
-			 envHg_9000000[[10]], envHg_9000000[[11]], envHg_9000000[[12]],
-			 envHg_9000000[[4]], envHg_9000000[[5]], envHg_9000000[[6]],
-			 envHg_9000000[[7]], envHg_9000000[[8]], envHg_9000000[[9]],
-			 nrow=3)
-dev.off()
 
-
-# ploting results
-envHg_8000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_8000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_8000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_8000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_8000000, Region="JP")
-									))
-# blood
-envHg_8000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_8000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_8000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_8000000, Region="JP")))
-# blood
-envHg_8000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_8000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_8000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_8000000, Region="JP")))
-# blood
-envHg_8000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_8000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_8000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_8000000, Region="JP")))
-# blood
-envHg_8000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_8000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_8000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_8000000.pdf", height=10, width=15)
-grid.arrange(#envHg_8000000[[1]], envHg_8000000[[2]], envHg_8000000[[3]],
-			 envHg_8000000[[10]], envHg_8000000[[11]], envHg_8000000[[12]],
-			 envHg_8000000[[4]], envHg_8000000[[5]], envHg_8000000[[6]],
-			 envHg_8000000[[7]], envHg_8000000[[8]], envHg_8000000[[9]],
-			 nrow=3)
-dev.off()
-
-
-# ploting results
-envHg_7000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_7000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_7000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_7000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_7000000, Region="JP")
-									))
-# blood
-envHg_7000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_7000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_7000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_7000000, Region="JP")))
-# blood
-envHg_7000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_7000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_7000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_7000000, Region="JP")))
-# blood
-envHg_7000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_7000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_7000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_7000000, Region="JP")))
-# blood
-envHg_7000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_7000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_7000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_7000000.pdf", height=10, width=15)
-grid.arrange(#envHg_7000000[[1]], envHg_7000000[[2]], envHg_7000000[[3]],
-			 envHg_7000000[[10]], envHg_7000000[[11]], envHg_7000000[[12]],
-			 envHg_7000000[[4]], envHg_7000000[[5]], envHg_7000000[[6]],
-			 envHg_7000000[[7]], envHg_7000000[[8]], envHg_7000000[[9]],
-			 nrow=3)
-dev.off()
-
-
-# ploting results
-envHg_6000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_6000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_6000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_6000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_6000000, Region="JP")
-									))
-# blood
-envHg_6000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_6000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_6000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_6000000, Region="JP")))
-# blood
-envHg_6000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_6000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_6000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_6000000, Region="JP")))
-# blood
-envHg_6000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_6000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_6000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_6000000, Region="JP")))
-# blood
-envHg_6000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_6000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_6000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_6000000.pdf", height=10, width=15)
-grid.arrange(#envHg_6000000[[1]], envHg_6000000[[2]], envHg_6000000[[3]],
-			 envHg_6000000[[10]], envHg_6000000[[11]], envHg_6000000[[12]],
-			 envHg_6000000[[4]], envHg_6000000[[5]], envHg_6000000[[6]],
-			 envHg_6000000[[7]], envHg_6000000[[8]], envHg_6000000[[9]],
-			 nrow=3)
-dev.off()
-
-
-# ploting results
-envHg_5000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_5000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_5000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_5000000, Region="JP")
-									))
-# blood
-envHg_5000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_5000000, Region="JP")))
-# blood
-envHg_5000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_5000000, Region="JP")))
-# blood
-envHg_5000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000000, Region="JP")))
-# blood
-envHg_5000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_5000000.pdf", height=10, width=15)
-grid.arrange(#envHg_5000000[[1]], envHg_5000000[[2]], envHg_5000000[[3]],
-			 envHg_5000000[[10]], envHg_5000000[[11]], envHg_5000000[[12]],
-			 envHg_5000000[[4]], envHg_5000000[[5]], envHg_5000000[[6]],
-			 envHg_5000000[[7]], envHg_5000000[[8]], envHg_5000000[[9]],
-			 nrow=3)
-dev.off()
-
-
-
-
-# ploting results
-envHg_4000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_4000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_4000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_4000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_4000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_4000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_4000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_4000000, Region="JP")
-									))
-# blood
-envHg_4000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_4000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_4000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_4000000, Region="JP")))
-# blood
-envHg_4000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_4000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_4000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_4000000, Region="JP")))
-# blood
-envHg_4000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_4000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_4000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_4000000, Region="JP")))
-# blood
-envHg_4000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_4000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_4000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_4000000.pdf", height=10, width=15)
-grid.arrange(#envHg_4000000[[1]], envHg_4000000[[2]], envHg_4000000[[3]],
-			 envHg_4000000[[10]], envHg_4000000[[11]], envHg_4000000[[12]],
-			 envHg_4000000[[4]], envHg_4000000[[5]], envHg_4000000[[6]],
-			 envHg_4000000[[7]], envHg_4000000[[8]], envHg_4000000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_3000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_3000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_3000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_3000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_3000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_3000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_3000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_3000000, Region="JP")
-									))
-# blood
-envHg_3000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_3000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_3000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_3000000, Region="JP")))
-# blood
-envHg_3000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_3000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_3000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_3000000, Region="JP")))
-# blood
-envHg_3000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_3000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_3000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_3000000, Region="JP")))
-# blood
-envHg_3000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_3000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_3000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_3000000.pdf", height=10, width=15)
-grid.arrange(#envHg_3000000[[1]], envHg_3000000[[2]], envHg_3000000[[3]],
-			 envHg_3000000[[10]], envHg_3000000[[11]], envHg_3000000[[12]],
-			 envHg_3000000[[4]], envHg_3000000[[5]], envHg_3000000[[6]],
-			 envHg_3000000[[7]], envHg_3000000[[8]], envHg_3000000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_2000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_2000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_2000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_2000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_2000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_2000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_2000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_2000000, Region="JP")
-									))
-# blood
-envHg_2000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_2000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_2000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_2000000, Region="JP")))
-# blood
-envHg_2000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_2000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_2000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_2000000, Region="JP")))
-# blood
-envHg_2000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_2000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_2000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_2000000, Region="JP")))
-# blood
-envHg_2000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_2000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_2000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_2000000.pdf", height=10, width=15)
-grid.arrange(#envHg_2000000[[1]], envHg_2000000[[2]], envHg_2000000[[3]],
-			 envHg_2000000[[10]], envHg_2000000[[11]], envHg_2000000[[12]],
-			 envHg_2000000[[4]], envHg_2000000[[5]], envHg_2000000[[6]],
-			 envHg_2000000[[7]], envHg_2000000[[8]], envHg_2000000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_1000000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_1000000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_1000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_1000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_1000000, Region="JP")
-									))
-# blood
-envHg_1000000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_1000000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_1000000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_1000000, Region="JP")))
-# blood
-envHg_1000000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_1000000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_1000000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_1000000, Region="JP")))
-# blood
-envHg_1000000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_1000000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_1000000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_1000000, Region="JP")))
-# blood
-envHg_1000000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_1000000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_1000000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_1000000.pdf", height=10, width=15)
-grid.arrange(#envHg_1000000[[1]], envHg_1000000[[2]], envHg_1000000[[3]],
-			 envHg_1000000[[10]], envHg_1000000[[11]], envHg_1000000[[12]],
-			 envHg_1000000[[4]], envHg_1000000[[5]], envHg_1000000[[6]],
-			 envHg_1000000[[7]], envHg_1000000[[8]], envHg_1000000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_750000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_750000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_750000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_750000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_750000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_750000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_750000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_750000, Region="JP")
-									))
-# blood
-envHg_750000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_750000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_750000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_750000, Region="JP")))
-# blood
-envHg_750000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_750000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_750000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_750000, Region="JP")))
-# blood
-envHg_750000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_750000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_750000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_750000, Region="JP")))
-# blood
-envHg_750000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_750000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_750000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_750000.pdf", height=10, width=15)
-grid.arrange(#envHg_750000[[1]], envHg_750000[[2]], envHg_750000[[3]],
-			 envHg_750000[[10]], envHg_750000[[11]], envHg_750000[[12]],
-			 envHg_750000[[4]], envHg_750000[[5]], envHg_750000[[6]],
-			 envHg_750000[[7]], envHg_750000[[8]], envHg_750000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_500000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_500000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_500000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_500000, Region="JP")
-									))
-# blood
-envHg_500000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_500000, Region="JP")))
-# blood
-envHg_500000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_500000, Region="JP")))
-# blood
-envHg_500000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500000, Region="JP")))
-# blood
-envHg_500000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_500000.pdf", height=10, width=15)
-grid.arrange(#envHg_500000[[1]], envHg_500000[[2]], envHg_500000[[3]],
-			 envHg_500000[[10]], envHg_500000[[11]], envHg_500000[[12]],
-			 envHg_500000[[4]], envHg_500000[[5]], envHg_500000[[6]],
-			 envHg_500000[[7]], envHg_500000[[8]], envHg_500000[[9]],
-			 nrow=3)
-dev.off()
-
-
-# ploting results
-envHg_75000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_75000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_75000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_75000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_75000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_75000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_75000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_75000, Region="JP")
-									))
-# blood
-envHg_75000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_75000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_75000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_75000, Region="JP")))
-# blood
-envHg_75000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_75000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_75000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_75000, Region="JP")))
-# blood
-envHg_75000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_75000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_75000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_75000, Region="JP")))
-# blood
-envHg_75000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_75000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_75000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_75000.pdf", height=10, width=15)
-grid.arrange(#envHg_75000[[1]], envHg_75000[[2]], envHg_75000[[3]],
-			 envHg_75000[[10]], envHg_75000[[11]], envHg_75000[[12]],
-			 envHg_75000[[4]], envHg_75000[[5]], envHg_75000[[6]],
-			 envHg_75000[[7]], envHg_75000[[8]], envHg_75000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_50000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_50000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_50000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_50000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_50000, Region="JP")
-									))
-# blood
-envHg_50000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_50000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_50000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_50000, Region="JP")))
-# blood
-envHg_50000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_50000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_50000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_50000, Region="JP")))
-# blood
-envHg_50000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_50000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_50000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_50000, Region="JP")))
-# blood
-envHg_50000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_50000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_50000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_50000.pdf", height=10, width=15)
-grid.arrange(#envHg_50000[[1]], envHg_50000[[2]], envHg_50000[[3]],
-			 envHg_50000[[10]], envHg_50000[[11]], envHg_50000[[12]],
-			 envHg_50000[[4]], envHg_50000[[5]], envHg_50000[[6]],
-			 envHg_50000[[7]], envHg_50000[[8]], envHg_50000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_5000 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_5000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_5000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_5000, Region="JP")
-									))
-# blood
-envHg_5000[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_5000, Region="JP")))
-# blood
-envHg_5000[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_5000, Region="JP")))
-# blood
-envHg_5000[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000, Region="JP")))
-# blood
-envHg_5000[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_5000[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_5000[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_5000.pdf", height=10, width=15)
-grid.arrange(#envHg_5000[[1]], envHg_5000[[2]], envHg_5000[[3]],
-			 envHg_5000[[10]], envHg_5000[[11]], envHg_5000[[12]],
-			 envHg_5000[[4]], envHg_5000[[5]], envHg_5000[[6]],
-			 envHg_5000[[7]], envHg_5000[[8]], envHg_5000[[9]],
-			 nrow=3)
-dev.off()
-
-# ploting results
-envHg_500 <- list()
-
-# chunk_1:3
-#dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500, Region="JP")))
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_500, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_500, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_500, Region="JP")
-									))
-# blood
-envHg_500[[3]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500[[1]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position=c(.1, .2)) +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500[[2]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1:3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_500, Region="JP")))
-# blood
-envHg_500[[6]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500[[4]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500[[5]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_2 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_500, Region="JP")))
-# blood
-envHg_500[[9]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500[[7]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500[[8]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_3 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-# chunk_1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500, Region="JP")))
-# blood
-envHg_500[[12]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_blood_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# breast
-envHg_500[[10]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_breast_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-# retrix
-envHg_500[[11]] <- ggplot(dat_Hg_env_bird, aes(x=log10Hg_env_mean, y= chunk_bird_retrix_log10Hg, col=Region)) +
-  geom_point() + scale_color_manual(values=c("#56B4E9", "orange")) +
-  stat_smooth(method=function(formula,data,weights=weight) rlm(formula,data,weights=weight,method="MM"),fullrange=T) +
-  #xlim(0,160) +
-  theme_bw() + theme(legend.position="none") +
-  labs(title=paste0("chunk_1 P_AK=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4], nsmall=4, digits=2),
-                    "; P_JP=",format(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4], nsmall=4, digits=2)
-  ))
-
-
-pdf("bird_envHg_500.pdf", height=10, width=15)
-grid.arrange(#envHg_500[[1]], envHg_500[[2]], envHg_500[[3]],
-			 envHg_500[[10]], envHg_500[[11]], envHg_500[[12]],
-			 envHg_500[[4]], envHg_500[[5]], envHg_500[[6]],
-			 envHg_500[[7]], envHg_500[[8]], envHg_500[[9]],
-			 nrow=3)
-dev.off()
 
 ####################################################################################################################
 ####################################################################################################################
-save.image("salt_2017_ak_jp_all.RData")
+save.image("210215_salt_2017_ak_jp_all.RData")
 
 
 signif_exposure <- data.frame()
-#500
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500, Region="JP")))
-region <- "AK"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_500, Region="JP")))
-region <- "AK"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_500, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_500, Region="JP")))
-region <- "AK"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#5000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000, Region="JP")))
-region <- "AK"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_5000, Region="JP")))
-region <- "AK"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_5000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_5000, Region="JP")))
-region <- "AK"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#50000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_50000, Region="JP")))
-region <- "AK"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_50000, Region="JP")))
-region <- "AK"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_50000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_50000, Region="JP")))
-region <- "AK"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 50000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#75000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_75000, Region="JP")))
-region <- "AK"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_75000, Region="JP")))
-region <- "AK"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_75000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_75000, Region="JP")))
-region <- "AK"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 75000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#500000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_500000, Region="JP")))
-region <- "AK"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_500000, Region="JP")))
-region <- "AK"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_500000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_500000, Region="JP")))
-region <- "AK"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 500000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#750000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_750000, Region="JP")))
-region <- "AK"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_750000, Region="JP")))
-region <- "AK"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_750000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_750000, Region="JP")))
-region <- "AK"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 750000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#1000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_1000000, Region="JP")))
-region <- "AK"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_1000000, Region="JP")))
-region <- "AK"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_1000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_1000000, Region="JP")))
-region <- "AK"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 1000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#2000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_2000000, Region="JP")))
-region <- "AK"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_2000000, Region="JP")))
-region <- "AK"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_2000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_2000000, Region="JP")))
-region <- "AK"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 2000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#3000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_3000000, Region="JP")))
-region <- "AK"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_3000000, Region="JP")))
-region <- "AK"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_3000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_3000000, Region="JP")))
-region <- "AK"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 3000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#4000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_4000000, Region="JP")))
-region <- "AK"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_4000000, Region="JP")))
-region <- "AK"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_4000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_4000000, Region="JP")))
-region <- "AK"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 4000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#5000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_5000000, Region="JP")))
-region <- "AK"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_5000000, Region="JP")))
-region <- "AK"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_5000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_5000000, Region="JP")))
-region <- "AK"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 5000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#6000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_6000000, Region="JP")))
-region <- "AK"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_6000000, Region="JP")))
-region <- "AK"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_6000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_6000000, Region="JP")))
-region <- "AK"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 6000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#7000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_7000000, Region="JP")))
-region <- "AK"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_7000000, Region="JP")))
-region <- "AK"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_7000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_7000000, Region="JP")))
-region <- "AK"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 7000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#8000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_8000000, Region="JP")))
-region <- "AK"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_8000000, Region="JP")))
-region <- "AK"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_8000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_8000000, Region="JP")))
-region <- "AK"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 8000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-#9000000
-chunk <- 1
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_1_jp_envHg_birdHg_9000000, Region="JP")))
-region <- "AK"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 2
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_2_jp_envHg_birdHg_9000000, Region="JP")))
-region <- "AK"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-chunk <- 3
-dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg_9000000, Region="AK"), cbind(chunk_3_jp_envHg_birdHg_9000000, Region="JP")))
-region <- "AK"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
-region <- "JP"
-size <- 9000000
-breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
-breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
-signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+
+for(neigh_size in seq(500, 210500, 10000)){
+#for(neigh_size in seq(500, 3000000, 10000)){
+	size <- neigh_size
+	chunk <- 1
+	dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_1_ak_envHg_birdHg[[neigh_size]], Region="AK"), cbind(chunk_1_jp_envHg_birdHg[[neigh_size]], Region="JP")))
+	region <- "AK"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+	region <- "JP"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+	chunk <- 2
+	dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_2_ak_envHg_birdHg[[neigh_size]], Region="AK"), cbind(chunk_2_jp_envHg_birdHg[[neigh_size]], Region="JP")))
+	region <- "AK"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+	region <- "JP"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+	chunk <- 3
+	dat_Hg_env_bird <- data.frame(rbind(cbind(chunk_3_ak_envHg_birdHg[[neigh_size]], Region="AK"), cbind(chunk_3_jp_envHg_birdHg[[neigh_size]], Region="JP")))
+	region <- "AK"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="AK",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+	region <- "JP"
+	breast <- coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	retrix <- coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	blood <- coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,4]
+	breast_sgn <- sign(coef(summary(lmRob(chunk_bird_breast_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	retrix_sgn <- sign(coef(summary(lmRob(chunk_bird_retrix_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	blood_sgn <- sign(coef(summary(lmRob(chunk_bird_blood_log10Hg ~ log10Hg_env_mean, data= dat_Hg_env_bird[dat_Hg_env_bird$Region=="JP",])))[2,1])
+	signif_exposure <- rbind(signif_exposure, cbind(region, size, chunk, breast, retrix, blood, breast_sgn, retrix_sgn, blood_sgn))
+}
+
 
 
 signif_exposure[, c(2, 4:9)] <- sapply(signif_exposure[, c(2, 4:9)], as.character)
@@ -4494,174 +1345,91 @@ signif_exposure_log10[, 6] <- -1 * signif_exposure_log10[, 6] * signif_exposure_
 SI_log10 <- list()
 
 # chunk 1
-SI_log10[[1]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= breast, col=region)) +
+SI_log10[[1]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= retrix, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(A) -- chunk 1")
-SI_log10[[2]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= retrix, col=region)) +
+  xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(A) -- stage 1 (early winter)")
+SI_log10[[2]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= breast, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(D)")
+  xlab("") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(B)")
 SI_log10[[3]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= blood, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("Neigborhood size (km)") + ylab("Exposure vs blood [-log10(P)]") + labs(title="(G)")
+  xlab("Neigborhood size (km)") + ylab("Exposure vs blood [-log10(P)]") + labs(title="(C)")
 # chunk 2
-SI_log10[[4]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= breast, col=region)) +
+SI_log10[[4]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= retrix, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("") + labs(title="(B) -- chunk 2")
-SI_log10[[5]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= retrix, col=region)) +
+  xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(D) -- stage 2 (mid-winter)")
+SI_log10[[5]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= breast, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("") + labs(title="(E)")
+  xlab("") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(E)")
 SI_log10[[6]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= blood, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("Neigborhood size (km)") + ylab("") + labs(title="(H)")
+  xlab("Neigborhood size (km)") + ylab("Exposure vs blood [-log10(P)]") + labs(title="(F)")
 # chunk 3
-SI_log10[[7]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,], aes(x=size, y= breast, col=region)) +
+SI_log10[[7]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,], aes(x=size, y= retrix, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("") + labs(title="(C) -- chunk 3")
-SI_log10[[8]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,], aes(x=size, y= retrix, col=region)) +
+  xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(G)  -- stage 3 (late winter)")
+SI_log10[[8]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,], aes(x=size, y= breast, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("") + ylab("") + labs(title="(F)")
+  xlab("") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(H)")
 SI_log10[[9]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,], aes(x=size, y= blood, col=region)) +
   geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
   geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
-  xlab("Neigborhood size (km)") + ylab("") + labs(title="(I)")
+  xlab("Neigborhood size (km)") + ylab("Exposure vs blood [-log10(P)]") + labs(title="(I)")
+
+
+SI_log10[[10]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= retrix, col=region)) +
+  geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
+  geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
+  theme_bw() + theme(legend.position="none") +
+  xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(A) -- stage 1 (early winter)")
+SI_log10[[11]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= breast, col=region)) +
+  geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
+  geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
+  theme_bw() + theme(legend.position="none") +
+  xlab("Neigborhood size (km)") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(B) -- stage 2 (mid-winter)")
 
 
 
 
 
-
-pdf("bird_envHg_significance.pdf", height=10, width=15)
+pdf("210215_bird_envHg_significance_all.pdf", height=10, width=15)
 grid.arrange(SI_log10[[1]], SI_log10[[4]], SI_log10[[7]],
 			 SI_log10[[2]], SI_log10[[5]], SI_log10[[8]],
 			 SI_log10[[3]], SI_log10[[6]], SI_log10[[9]],
 			 nrow=3)
 dev.off()
 
+pdf("210215_bird_envHg_significance_focused.pdf", height=8, width=6)
+grid.arrange(SI_log10[[10]], 
+			 SI_log10[[11]], 
+			 nrow=2)
+dev.off()
+
+
+
 
 ####################################################################################################################
 ####################################################################################################################
-save.image("salt_2017_ak_jp_all.RData")
+save.image("210215_salt_2017_ak_jp_all.RData")
 ####################################################################################################################
 ####################################################################################################################
-env_Hg <- list()
-
-# 500
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_500, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_500, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_500, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_500, Region="JP")
-									))
-env_Hg[[1]] <- dat_Hg_env_bird
-# 5000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_5000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_5000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_5000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_5000, Region="JP")
-									))
-env_Hg[[2]] <- dat_Hg_env_bird
-# 50000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_50000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_50000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_50000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_50000, Region="JP")
-									))
-env_Hg[[3]] <- dat_Hg_env_bird
-# 500000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_500000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_500000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_500000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_500000, Region="JP")
-									))
-env_Hg[[4]] <- dat_Hg_env_bird
-# 1000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_1000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_1000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_1000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_1000000, Region="JP")
-									))
-env_Hg[[5]] <- dat_Hg_env_bird
-# 5000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_5000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_5000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_5000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_5000000, Region="JP")
-									))
-env_Hg[[6]] <- dat_Hg_env_bird
-# 6000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_6000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_6000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_6000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_6000000, Region="JP")
-									))
-env_Hg[[7]] <- dat_Hg_env_bird
-# 7000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_7000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_7000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_7000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_7000000, Region="JP")
-									))
-env_Hg[[8]] <- dat_Hg_env_bird
-# 8000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_8000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_8000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_8000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_8000000, Region="JP")
-									))
-env_Hg[[9]] <- dat_Hg_env_bird
-# 9000000
-dat_Hg_env_bird <- data.frame(rbind(
-									cbind(chunk_1_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_1_jp_envHg_birdHg_9000000, Region="JP"),
-									cbind(chunk_2_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_2_jp_envHg_birdHg_9000000, Region="JP"),
-									cbind(chunk_3_ak_envHg_birdHg_9000000, Region="AK"), 
-									cbind(chunk_3_jp_envHg_birdHg_9000000, Region="JP")
-									))
-env_Hg[[10]] <- dat_Hg_env_bird
 
 
 ####################################################################################################################
