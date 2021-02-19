@@ -1395,14 +1395,18 @@ SI_log10[[9]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 3,]
 
 
 SI_log10[[10]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 1,], aes(x=size, y= retrix, col=region)) +
-  geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
-  geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
-  theme_bw() + theme(legend.position="none") +
+  geom_point(shape=18) + scale_color_manual(values=c("#56B4E9", "orange")) +
+  geom_smooth( aes(x=size, y= retrix, col=region), fill=NA, size=1, span = 0.2) +
+  geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
+  theme_bw() + theme(legend.position=c(.15, .85)) + 
+  coord_trans(x="log10") + scale_x_continuous(breaks=c(10, 50, 100, 250, 500, 1000, 1750, 3000)) +
   xlab("") + ylab("Exposure vs rectrix [-log10(P)]") + labs(title="(A) -- stage 1 (early winter)")
 SI_log10[[11]] <- ggplot(signif_exposure_log10[signif_exposure_log10$chunk == 2,], aes(x=size, y= breast, col=region)) +
-  geom_point(shape=18, col="black") + scale_color_manual(values=c("#56B4E9", "orange")) +
-  geom_line(size=2, alpha = 0.7) + geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
+  geom_point(shape=18) + scale_color_manual(values=c("#56B4E9", "orange")) +
+  geom_smooth( aes(x=size, y= breast, col=region), fill=NA, size=1, span = 0.2) +
+  geom_hline(yintercept = -log10(0.01), col="black", linetype=2) +
   theme_bw() + theme(legend.position="none") +
+  coord_trans(x="log10") + scale_x_continuous(breaks=c(10, 50, 100, 250, 500, 1000, 1750, 3000)) +
   xlab("Neigborhood size (km)") + ylab("Exposure vs breast [-log10(P)]") + labs(title="(B) -- stage 2 (mid-winter)")
 
 
@@ -1421,6 +1425,7 @@ grid.arrange(SI_log10[[10]],
 			 SI_log10[[11]], 
 			 nrow=2)
 dev.off()
+
 
 
 
