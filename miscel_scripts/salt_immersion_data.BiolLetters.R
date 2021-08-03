@@ -1,3 +1,8 @@
+# This script was used in Shoji A., Aris-Brosou S., Culina A., Fayet A., Kirk H., Padget O., Juarez-Martinez I., Boyle D., Nakata T., Perrins C.M. and Guilford T. 2015. 
+# Breeding phenology and winter activity predict subsequent breeding success in a trans-global migratory seabird. 
+# Biology Letters 11:20150671.
+# https://doi.org/10.1098/rsbl.2015.0671
+
 library(adabag)
 library(rpart)
 library(mlbench)
@@ -226,8 +231,11 @@ importance_sorted
 
 
 # 10-fold cross-validation
-RS.boostcv <- boosting.cv(post_rs~., data= boost.df, v=20, mfinal = 5000, coeflearn = "Freund", control=rpart.control(minsplit=5))RS.boostcv[-1] #  0.3873874
-#RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 10, coeflearn = "Breiman", control=rpart.control(minsplit=3))#RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 100, coeflearn = "Zhu", control=rpart.control(minsplit=4))#RS.boostcv[-1] # 0.407767
+RS.boostcv <- boosting.cv(post_rs~., data= boost.df, v=20, mfinal = 5000, coeflearn = "Freund", control=rpart.control(minsplit=5))
+RS.boostcv[-1] #  0.3873874
+#RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 10, coeflearn = "Breiman", control=rpart.control(minsplit=3))
+#RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 100, coeflearn = "Zhu", control=rpart.control(minsplit=4))
+#RS.boostcv[-1] # 0.407767
 
 succRate <- 100 - 100*RS.boostcv[-1]$error
 
@@ -248,7 +256,8 @@ RS.adaboost <- boosting(post_rs~., data= boost.df, mfinal = 100, coeflearn = "Fr
 importance_sorted <- sort(RS.adaboost$importance, decreasing=T)
 importance_sorted
 # 10-fold cross-validation
-RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))RS.boostcv[-1] #  0.3873874
+RS.boostcv <- boosting.cv(post_rs~., data= boost.df, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))
+RS.boostcv[-1] #  0.3873874
 
 
 
@@ -259,7 +268,8 @@ succRateVect <- c()
 #for(i in 1:NREPS){
 succRateVect <- foreach(i = 1:NREPS,.combine='rbind') %dopar% {
 	print(i)
-	RS.boostcv <- boosting.cv(post_rs~., data= boost.df, coeflearn = "Freund", control=rpart.control(minsplit=5))	RS.boostcv[-1] #  0.3873874
+	RS.boostcv <- boosting.cv(post_rs~., data= boost.df, coeflearn = "Freund", control=rpart.control(minsplit=5))
+	RS.boostcv[-1] #  0.3873874
 	#succRateVect[i] <- 100 - 100*RS.boostcv[-1]$error
 	return(100 - 100*RS.boostcv[-1]$error)
 }
@@ -437,9 +447,19 @@ setdiff(coe_trait$Ring, levels(sum_all$ind))
 # added on Sep 25, 2015
 #######################
 
-Isthmus <- c(0.59,0.7,0.69,0.55,0.6,NA)
+Isthmus <- c(0.59,
+0.7,
+0.69,
+0.55,
+0.6,
+NA)
 
-NorthHaven <- c(0.92,0.86,0.91,1,0.84,0.63)
+NorthHaven <- c(0.92,
+0.86,
+0.91,
+1,
+0.84,
+0.63)
 
 wilcox.test(Isthmus, NorthHaven, paired=T)
 
@@ -3024,8 +3044,20 @@ dev.off()
 library(markovchain)
 statesNames <- c("Chick","Egg","Skip")
 dimnames(my_transition_mat) <- list(statesNames,statesNames)
-mcA <- new("markovchain", transitionMatrix = my_transition_mat)absorbingStates(mcA)transientStates(mcA)is.irreducible(mcA)period(mcA)
-steadyStates(mcA) # same as pi_dist, of courseFP_Chick <- firstPassage  (mcA,"Chick",10) # longevity of 50 years?FP_Egg <- firstPassage  (mcA,"Egg",10) # longevity of 50 years?FP_Skip <- firstPassage  (mcA,"Skip",10) # longevity of 50 years?pdf("FistPassageTimes.pdf", family="Times",width=10,height=2)
+mcA <- new("markovchain", transitionMatrix = my_transition_mat)
+absorbingStates(mcA)
+transientStates(mcA)
+is.irreducible(mcA)
+period(mcA)
+steadyStates(mcA) # same as pi_dist, of course
+
+
+FP_Chick <- firstPassage  (mcA,"Chick",10) # longevity of 50 years?
+FP_Egg <- firstPassage  (mcA,"Egg",10) # longevity of 50 years?
+FP_Skip <- firstPassage  (mcA,"Skip",10) # longevity of 50 years?
+
+
+pdf("FistPassageTimes.pdf", family="Times",width=10,height=2)
 par(oma = c(0,0,0,0), mar = c(4, 4, 1, 1), mfrow=c(1,3))
 plot(FP_Chick[,1],type="l",col="blue",xlab="Time (in years)")
 lines(FP_Chick[,2],type="l",col="red")

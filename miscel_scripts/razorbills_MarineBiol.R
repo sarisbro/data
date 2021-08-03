@@ -1,3 +1,8 @@
+# This script was used in Shoji A.,Owen E., Bolton M., Dean B., Kirk H., Fayet A., Boyle D., Freeman R., Perrins C., Aris-Brosou S. and Guilford T. 2014. 
+# Flexible foraging strategies in a diving seabird with high flight cost. 
+# Marine Biology. 161:2121-2129.
+# https://doi.org/10.1007/s00227-014-2492-9
+
 # root name
 basedir <- "/Users/stephane/Documents/data/akiko/131004/"
 
