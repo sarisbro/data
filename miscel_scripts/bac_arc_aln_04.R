@@ -1,4 +1,7 @@
-# This script was used in Colby et al. (revisions) to compare the 
+# This script was used in Colby G., Ruuskanen M.O., St.Pierre K.A., St.Louis V.L., Poulain A.J., Aris-Brosou S. 2020. 
+# Warming climate is reducing the diversity of dominant microbes in the largest High Arctic lake. Frontiers in Microbiology. 11:2316.
+# https://doi.org/10.3389/fmicb.2020.561194
+# to compare the 
 # bacterial and archeal trees, with the full origianl alignments
 # that contained missing data, and trimmed alignments where sites
 # with > 50% indels where eliminated. The metric used to quantify

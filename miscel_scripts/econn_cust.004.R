@@ -1,3 +1,8 @@
+# This script was used in Aris-Brosou S., Kim J., Li L. and Liu H. 2018. 
+# Predicting the reasons of customer complaints: a first step towards anticipating quality issues of in vitro diagnostics assays with machine learning. 
+# JMIR Medical Informatics. 6:e34.
+# https://doi.org/10.2196/medinform.9960
+
 library(locfit)
 library(car)
 library(animation)
@@ -1891,7 +1896,8 @@ dev.off()
 
 # std 10-fold cross-validation
 # adaboost.cv <- boosting.cv(CallArea ~ NbPriorSGenChange+ NbPriorSLotChange+ NbPriorERFLotChange+ NbPriorIWFLotChange+ NbPriorContLotNumChange+ NbPriorCalCurveChange+ TimeToComplain+ MostRecentConcentration+ FiveMostRecentConcentrationMean+ FiveMostRecentConcentrationSD, data = ecust_dat_noNA,
-# 				 v=10, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))# adaboost.cv[-1] #   0.08196721
+# 				 v=10, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))
+# adaboost.cv[-1] #   0.08196721
 # 
 # succRate <- 100 - 100* adaboost.cv[-1]$error
 # succRate
@@ -1980,7 +1986,8 @@ dev.off()
 
 # std 10-fold cross-validation
 # adaboost.cv <- boosting.cv(CallArea ~ NbPriorSGenChange+ NbPriorSLotChange+ NbPriorERFLotChange+ NbPriorIWFLotChange+ NbPriorContLotNumChange+ NbPriorCalCurveChange+ TimeToComplain+ MostRecentConcentration+ FiveMostRecentConcentrationMean+ FiveMostRecentConcentrationSD, data = ecust_dat_noNA,
-# 				 v=10, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))# adaboost.cv[-1] #   0.08196721
+# 				 v=10, mfinal = 100, coeflearn = "Freund", control=rpart.control(minsplit=5))
+# adaboost.cv[-1] #   0.08196721
 # 
 # succRate <- 100 - 100* adaboost.cv[-1]$error
 # succRate
