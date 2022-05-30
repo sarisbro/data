@@ -2,7 +2,7 @@ Additional data
 ===============
 
 Lemieux.etal.tar.bz2:
-Lemieux A., Colby G.A, Poulain A.J., Aris-Brosou S. 2021. Viral spillover risk in High Arctic increases with melting glaciers.
+Lemieux A., Colby G.A, Poulain A.J., Aris-Brosou S. 2022. Viral spillover risk in High Arctic increases with melting glaciers.
 DOI TBA
 
 Wallbank.ArisBrosou.tar.bz2:
