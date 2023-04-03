@@ -1,7 +1,7 @@
 Additional data
 ===============
 
-VAB_py_code.tar.bz2
+VAB_py_code.tar.bz2:
 Vilain M., Aris-Brosou S. 2023. Machine learning algorithms associate case numbers with SARS-CoV-2 variants rather than with impactful mutations. Submitted.
 
 Lemieux.etal.tar.bz2:
