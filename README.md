@@ -2,10 +2,11 @@ Additional data
 ===============
 
 VAB_py_code.tar.bz2:
-Vilain M., Aris-Brosou S. 2023. Machine learning algorithms associate case numbers with SARS-CoV-2 variants rather than with impactful mutations. Submitted.
+Vilain M., Aris-Brosou S. 2023. Machine learning algorithms associate case numbers with SARS-CoV-2 variants rather than with impactful mutations.  Viruses. 15:1226.
+https://doi.org/10.3390/v15061226 
 
 Lemieux.etal.tar.bz2:
-Lemieux A., Colby G.A, Poulain A.J., Aris-Brosou S. 2022. Viral spillover risk increases with climate change in High Arctic lake sediments. Proceedings of the Royal Society B, 289(1985), 20221073
+Lemieux A., Colby G.A, Poulain A.J., Aris-Brosou S. 2022. Viral spillover risk increases with climate change in High Arctic lake sediments. Proceedings of the Royal Society B. 289(1985), 20221073
 https://doi.org/10.1098/rspb.2022.1073
 
 Wallbank.ArisBrosou.tar.bz2:
