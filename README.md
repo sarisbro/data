@@ -1,6 +1,9 @@
 Additional data
 ===============
 
+VMA_scripts.tar.bz2
+Matthieu Vilain, Mghabghab R. Aris-Brosou S. 2025. Global warming drives the evolutionary rate of H1N1 and H3N2 influenza viruses.
+
 Lemieux.etal.2.tar.bz2
 Lemieux A., Poulain A.J., Aris-Brosou S. 2024. The High Arctic is dominated by uncharacterized, genetically highly diverse bacteriophages. 
 https://doi.org/
