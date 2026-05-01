@@ -1,13 +1,13 @@
 Additional data
 ===============
 
+Lemieux.etal.2.tar.bz2
+Lemieux A., Poulain A.J., Aris-Brosou S. 2026. The world's largest High Arctic lake is dominated by uncharacterized, genetically highly diverse phages. 
+https://doi.org/10.1101/2024.09.10.612304
+
 VMA_scripts.tar.bz2
 Matthieu Vilain, Mghabghab R. Aris-Brosou S. 2025. Global warming drives the evolutionary rate of H1N1 and H3N2 influenza viruses.
 https://doi.org/10.1101/2025.11.20.689475
-
-Lemieux.etal.2.tar.bz2
-Lemieux A., Poulain A.J., Aris-Brosou S. 2024. The High Arctic is dominated by uncharacterized, genetically highly diverse bacteriophages. 
-https://doi.org/10.1101/2024.09.10.612304
 
 VAB_py_code.tar.bz2:
 Vilain M., Aris-Brosou S. 2023. Machine learning algorithms associate case numbers with SARS-CoV-2 variants rather than with impactful mutations.  Viruses. 15:1226.
