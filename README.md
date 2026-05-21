@@ -1,6 +1,10 @@
 Additional data
 ===============
 
+KSAB_scripts.tar.bz2
+Kulkarni V., Aris-Brosou S. 2026. Terrestrial DNA viromes are systematically more divergent from reference databases than marine ones, with polar ecosystems amplifying the contrast.
+https://doi.org/10.64898
+
 TNVab_data.tar.bz2
 Tomas M., Ndongo P.C.K., Vilain M., Aris-Brosou S. 2026. Variant emergence, not vaccine deployment, drives episodic positive selection on the SARS-CoV-2 spike at provincial scale in Canada.
 https://doi.org/10.64898/2026.05.16.725625
