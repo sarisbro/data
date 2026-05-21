@@ -3,7 +3,7 @@ Additional data
 
 TNVab_data.tar.bz2
 Tomas M., Ndongo P.C.K., Vilain M., Aris-Brosou S. 2026. Variant emergence, not vaccine deployment, drives episodic positive selection on the SARS-CoV-2 spike at provincial scale in Canada.
-https://doi.org/10.1101/2026.725625
+https://doi.org/10.64898/2026.05.16.725625
 
 Lemieux.etal.2.tar.bz2
 Lemieux A., Poulain A.J., Aris-Brosou S. 2026. The world's largest High Arctic lake is dominated by uncharacterized, genetically highly diverse phages. 
