@@ -14,7 +14,7 @@ Lemieux A., Poulain A.J., Aris-Brosou S. 2026. The world's largest High Arctic l
 https://doi.org/10.1101/2024.09.10.612304
 
 VMA_scripts.tar.bz2
-Matthieu Vilain, Mghabghab R. Aris-Brosou S. 2025. Global warming drives the evolutionary rate of H1N1 and H3N2 influenza viruses.
+Matthieu Vilain, Mghabghab R. Aris-Brosou S. 2026. Episodic positive selection accumulates through time in seasonal influenza A, with no climatic signature.
 https://doi.org/10.1101/2025.11.20.689475
 
 VAB_py_code.tar.bz2:
