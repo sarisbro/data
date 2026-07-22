@@ -1,9 +1,14 @@
 Additional data
 ===============
 
+260629_AMR_code.tar.bz2
+Aris-Brosou S., Kouassi A. 2026.
+Unsupervised detection of antimicrobial-resistance determinants by coupling protein-language-models and evolutionary signatures.
+https://doi.org/10.64898/
+
 KSAB_scripts.tar.bz2
 Kulkarni V., Aris-Brosou S. 2026. Terrestrial DNA viromes are systematically more divergent from reference databases than marine ones, with polar ecosystems amplifying the contrast.
-https://doi.org/10.64898
+https://doi.org/10.64898/2025.12.09.693195
 
 TNVab_data.tar.bz2
 Tomas M., Ndongo P.C.K., Vilain M., Aris-Brosou S. 2026. Variant emergence, not vaccine deployment, drives episodic positive selection on the SARS-CoV-2 spike at provincial scale in Canada.
