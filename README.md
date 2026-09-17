@@ -1,6 +1,11 @@
 Additional data
 ===============
 
+viral-fitness-unsupervised.tar.bz2
+Aris-Brosou S., Vilain M. 2026.
+A moving target: non-stationary selection governs unsupervised prediction of viral fitness.
+https://doi.org/10.64898/
+
 260629_AMR_code.tar.bz2
 Aris-Brosou S., Kouassi A. 2026.
 Unsupervised detection of antimicrobial-resistance determinants by coupling protein-language-models and evolutionary signatures.
